@@ -268,17 +268,833 @@ class MainActivity : Activity() {
         if (!running) return
 
         val js = """
-        (function(){
-          const from=${JSONObject.quote(from)}, to=${JSONObject.quote(to)};
-          const date=${JSONObject.quote(toIso(targetDate))};
+            (function(){
+              const from=${JSONObject.quote(from)}, 
+                    to=${JSONObject.quote(to)};
+              
+              const date=${JSONObject.quote(toIso(targetDate))};
 
-          function vis(sel){
-            return [...document.querySelectorAll(sel)]
-              .find(e =>
-                e.offsetWidth ||
-                e.offsetHeight ||
-                e.getClientRects().length
-              )
-          }
+              function vis(sel){
+                return [...document.querySelectorAll(sel)]
+                  .find(e =>
+                    e.offsetWidth ||
+                    e.offsetHeight ||
+                    e.getClientRects().length
+                  );
+              }
 
-          function fire(e){
+              function fire(e){
+                ['input','change','blur'].forEach(t =>
+                  e.dispatchEvent(
+                    new Event(t,{bubbles:true})
+                  )
+                );
+              }
+
+              function city(name, ctrl){
+
+                const e =
+                  vis('input[formcontrolname="'+ctrl+'"]');
+
+                if(!e) return false;
+
+                e.focus();
+
+                const s =
+                  Object.getOwnPropertyDescriptor(
+                    HTMLInputElement.prototype,
+                    'value'
+                  ).set;
+
+                s.call(e,name);
+
+                fire(e);
+
+                return true;
+              }
+
+              function dateSet(){
+
+                const v =
+                  vis('input.datepicker.hasDatepicker') ||
+                  vis('input#doj');
+
+                if(v){
+
+                  const s =
+                    Object.getOwnPropertyDescriptor(
+                      HTMLInputElement.prototype,
+                      'value'
+                    ).set;
+
+                  s.call(v,date);
+
+                  fire(v);
+                }
+
+                const h =
+                  document.querySelector(
+                    'input[type="hidden"][formcontrolname="doj"]'
+                  );
+
+                if(h){
+
+                  const s =
+                    Object.getOwnPropertyDescriptor(
+                      HTMLInputElement.prototype,
+                      'value'
+                    ).set;
+
+                  s.call(h,date);
+
+                  fire(h);
+                }
+
+                return true;
+              }
+
+              [
+                ...document.querySelectorAll(
+                  'button,[role="button"],select,option'
+                )
+              ].forEach(e => {
+
+                if(
+                  (e.innerText ||
+                   e.textContent ||
+                   '').trim() === 'I AGREE'
+                ){
+                  e.click();
+                }
+
+              });
+
+              city(from,'fromcity');
+              city(to,'tocity');
+              dateSet();
+
+              const sels =
+                [...document.querySelectorAll('select')];
+
+              sels.forEach(s =>
+                [...s.options].forEach(o => {
+
+                  if(
+                    o.value === 'S_CHAIR' ||
+                    o.textContent.trim() === 'S_CHAIR'
+                  ){
+                    o.selected = true;
+                    fire(s);
+                  }
+
+                })
+              );
+
+              const txt =
+                [...document.querySelectorAll('*')]
+                .find(e =>
+                  e.childElementCount === 0 &&
+                  (e.textContent || '').trim() === 'S_CHAIR' &&
+                  (e.offsetWidth || e.offsetHeight)
+                );
+
+              if(txt) txt.click();
+
+              return [...document.querySelectorAll('button')]
+                .find(b =>
+                  (b.innerText || '').trim() === 'Search' &&
+                  !b.disabled
+                )
+                ? 'READY'
+                : 'WAIT';
+
+            })()
+        """.trimIndent()
+
+        eval(js) {
+
+            handler.postDelayed(
+                {
+                    clickFirstSearch()
+                },
+                800
+            )
+        }
+    }
+
+    private fun clickFirstSearch() {
+
+        if (!running) return
+
+        eval(
+            """
+                (function(){
+
+                  const buttons =
+                    [...document.querySelectorAll('button')]
+                    .filter(b =>
+                      (b.innerText || '').trim() === 'Search' &&
+                      !b.disabled &&
+                      b.offsetWidth > 0 &&
+                      b.offsetHeight > 0
+                    );
+
+                  if(buttons.length > 0){
+
+                    const b = buttons[0];
+
+                    b.scrollIntoView({
+                      behavior: 'auto',
+                      block: 'center'
+                    });
+
+                    b.focus();
+
+                    try {
+                      b.click();
+                    } catch(e) {
+
+                      ['mousedown','mouseup','click'].forEach(type => {
+                        b.dispatchEvent(
+                          new MouseEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window
+                          })
+                        );
+                      });
+
+                    }
+
+                    return 'CLICKED';
+                  }
+
+                  return 'WAIT';
+
+                })()
+            """.trimIndent()
+        ) { result ->
+
+            if (!running) return@eval
+
+            if (result.contains("CLICKED")) {
+
+                append(
+                    "Search clicked; waiting for Railway result..."
+                )
+
+                waitResult(0)
+
+            } else {
+
+                handler.postDelayed(
+                    {
+                        clickFirstSearch()
+                    },
+                    500
+                )
+            }
+        }
+    }
+
+    private fun waitResult(elapsed: Int) {
+
+        if (!running) return
+
+        eval("location.href") { raw ->
+
+            val url =
+                raw.trim('"')
+
+            if(
+                url.contains(
+                    "/booking/train/search"
+                )
+            ){
+
+                append(
+                    "Result page detected. Waiting for result data (5 sec initial)..."
+                )
+
+                handler.postDelayed(
+                    {
+                        checkResult(0)
+                    },
+                    5000
+                )
+
+            } else if(elapsed >= 90000){
+
+                append(
+                    "Result page timeout; moving safely to next route."
+                )
+
+                nextRoute()
+
+            } else {
+
+                handler.postDelayed(
+                    {
+                        waitResult(
+                            elapsed + 1000
+                        )
+                    },
+                    1000
+                )
+            }
+        }
+    }
+
+    private fun checkResult(elapsed: Int) {
+
+        if (!running) return
+
+        val js = """
+            (function(){
+
+              const body =
+                (document.body?.innerText || '')
+                .replace(/\s+/g,' ')
+                .toUpperCase();
+
+              if(
+                body.includes(
+                  'NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE'
+                )
+              ){
+                return JSON.stringify({
+                  type:'NO_TICKET'
+                });
+              }
+
+              const out = [];
+
+              document
+                .querySelectorAll('.available-text')
+                .forEach(label => {
+
+                  const card =
+                    label.closest(
+                      '.single-seat-class'
+                    );
+
+                  const trip =
+                    label.closest(
+                      '.single-trip-wrapper'
+                    );
+
+                  if(!card || !trip) return;
+
+                  const tl =
+                    (trip.innerText || '')
+                    .split(/\n+/)
+                    .map(x => x.trim())
+                    .filter(Boolean);
+
+                  const cl =
+                    (card.innerText || '')
+                    .split(/\n+/)
+                    .map(x => x.trim())
+                    .filter(Boolean);
+
+                  const ll =
+                    (label.innerText || '')
+                    .split(/\n+/)
+                    .map(x => x.trim())
+                    .filter(Boolean);
+
+                  let n =
+                    parseInt(
+                      ll[ll.length-1] || '0',
+                      10
+                    );
+
+                  if(
+                    !Number.isNaN(n) &&
+                    n > 0
+                  ){
+
+                    out.push({
+                      train:
+                        tl[0] ||
+                        'UNKNOWN TRAIN',
+
+                      class_name:
+                        cl[0] ||
+                        'S_CHAIR',
+
+                      available:n
+                    });
+                  }
+                });
+
+              if(out.length){
+
+                return JSON.stringify({
+                  type:'AVAILABLE',
+                  items:out
+                });
+
+              }
+
+              return JSON.stringify({
+                type:'WAIT'
+              });
+
+            })()
+        """.trimIndent()
+
+        eval(js) { raw ->
+
+            try {
+
+                val o =
+                    JSONObject(
+                        raw
+                            .trim('"')
+                            .replace("\\\"", "\"")
+                    )
+
+                val type =
+                    o.optString("type")
+
+                when(type){
+
+                    "NO_TICKET" -> {
+
+                        append(
+                            "No ticket: ${routes[routeIndex].first} → ${routes[routeIndex].second}"
+                        )
+
+                        continueAfterNoTicket()
+                    }
+
+                    "AVAILABLE" -> {
+
+                        val arr =
+                            o.getJSONArray("items")
+
+                        handleAvailable(arr)
+                    }
+
+                    else -> {
+
+                        if(elapsed >= 90000){
+
+                            append(
+                                "Result data timeout; NOT treating empty page as no-ticket."
+                            )
+
+                            nextRoute()
+
+                        } else {
+
+                            handler.postDelayed(
+                                {
+                                    checkResult(
+                                        elapsed + 1000
+                                    )
+                                },
+                                1000
+                            )
+                        }
+                    }
+                }
+
+            } catch(e: Exception) {
+
+                if(elapsed >= 90000){
+
+                    nextRoute()
+
+                } else {
+
+                    handler.postDelayed(
+                        {
+                            checkResult(
+                                elapsed + 1000
+                            )
+                        },
+                        1000
+                    )
+                }
+            }
+        }
+    }
+
+    private fun handleAvailable(
+        arr: JSONArray
+    ) {
+
+        val (from, to) =
+            routes[routeIndex]
+
+        val sb =
+            StringBuilder(
+                "🎫 BANGLADESH RAILWAY TICKET AVAILABLE\n\n" +
+                "Route: $from → $to\n" +
+                "Date: $targetDate\n\n"
+            )
+
+        for(i in 0 until arr.length()){
+
+            val x =
+                arr.getJSONObject(i)
+
+            sb.append(
+                "🚆 ${x.optString("train")}\n"
+            )
+
+            sb.append(
+                "💺 Class: ${x.optString("class_name")}\n"
+            )
+
+            sb.append(
+                "🎟 Tickets: ${x.optInt("available")}\n\n"
+            )
+        }
+
+        append(sb.toString())
+
+        sendTelegram(
+            sb.toString()
+        )
+
+        nextRoute()
+    }
+
+    private fun continueAfterNoTicket() {
+
+        if (!running) return
+
+        if(routeIndex == 5){
+
+            append(
+                "First 6 routes completed. 30-second group break..."
+            )
+
+            handler.postDelayed(
+                {
+                    if(running){
+
+                        routeIndex = 6
+
+                        runRoute(6)
+                    }
+                },
+                30000
+            )
+
+            return
+        }
+
+        if(routeIndex < 5){
+
+            val next =
+                routeIndex + 1
+
+            val button = 1
+
+            routeIndex = next
+
+            append(
+                "Using suggested Search button #$button for next route."
+            )
+
+            clickSuggested(
+                button,
+                routes[next].first,
+                routes[next].second
+            )
+
+            return
+        }
+
+        if(routeIndex < 11){
+
+            val next =
+                routeIndex + 1
+
+            val button = 2
+
+            routeIndex = next
+
+            append(
+                "Using suggested Search button #$button for next route."
+            )
+
+            clickSuggested(
+                button,
+                routes[next].first,
+                routes[next].second
+            )
+
+            return
+        }
+
+        nextRoute()
+    }
+
+    private fun clickSuggested(
+        buttonNumber: Int,
+        from: String,
+        to: String
+    ) {
+
+        val js = """
+            (function(){
+
+              const bs =
+                [...document.querySelectorAll('button')]
+                .filter(b =>
+                  (b.innerText || '').trim() === 'Search' &&
+                  !b.disabled
+                );
+
+              if(
+                bs.length >= $buttonNumber
+              ){
+
+                bs[$buttonNumber-1].click();
+
+                return 'CLICKED';
+              }
+
+              return 'NO_BUTTON';
+
+            })()
+        """.trimIndent()
+
+        eval(js) { result ->
+
+            append(
+                "Suggested Search result: $result"
+            )
+
+            handler.postDelayed(
+                {
+                    waitResult(0)
+                },
+                1000
+            )
+        }
+    }
+
+    private fun nextRoute() {
+
+        if (!running) return
+
+        if(routeIndex == 5){
+
+            append(
+                "First 6 routes completed. 30-second group break..."
+            )
+
+            handler.postDelayed(
+                {
+                    if(running){
+                        runRoute(6)
+                    }
+                },
+                30000
+            )
+
+            return
+        }
+
+        if(routeIndex < 11){
+
+            handler.postDelayed(
+                {
+                    runRoute(
+                        routeIndex + 1
+                    )
+                },
+                500
+            )
+
+            return
+        }
+
+        append(
+            "=== ALL 12 ROUTES CHECKED ==="
+        )
+
+        handler.postDelayed(
+            {
+
+                if (!running)
+                    return@postDelayed
+
+                cycle++
+
+                append(
+                    "30-second cycle break completed; restarting from first route."
+                )
+
+                runRoute(0)
+
+            },
+            30000
+        )
+    }
+
+    private fun sendTelegram(
+        message: String
+    ){
+
+        val token =
+            tokenEdit.text.toString().trim()
+
+        val chat =
+            chatEdit.text.toString().trim()
+
+        if(
+            token.isEmpty() ||
+            chat.isEmpty()
+        ){
+
+            append(
+                "Telegram skipped: token/chat ID not set."
+            )
+
+            return
+        }
+
+        executor.execute {
+
+            try {
+
+                val url =
+                    URL(
+                        "https://api.telegram.org/bot$token/sendMessage"
+                    )
+
+                val c =
+                    url.openConnection()
+                        as HttpURLConnection
+
+                c.requestMethod = "POST"
+                c.doOutput = true
+                c.connectTimeout = 15000
+                c.readTimeout = 15000
+
+                val data =
+                    "chat_id=" +
+                    URLEncoder.encode(
+                        chat,
+                        "UTF-8"
+                    ) +
+                    "&text=" +
+                    URLEncoder.encode(
+                        message,
+                        "UTF-8"
+                    )
+
+                c.outputStream.use {
+                    it.write(
+                        data.toByteArray()
+                    )
+                }
+
+                val ok =
+                    c.responseCode in 200..299
+
+                handler.post {
+
+                    append(
+                        if(ok)
+                            "✓ Telegram notification sent."
+                        else
+                            "✗ Telegram HTTP ${c.responseCode}"
+                    )
+                }
+
+                c.disconnect()
+
+            } catch(e: Exception){
+
+                handler.post {
+
+                    append(
+                        "✗ Telegram failed: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    private fun eval(
+        js: String,
+        cb: (String) -> Unit
+    ){
+
+        web.evaluateJavascript(js) { r ->
+            cb(r ?: "")
+        }
+    }
+
+    private fun toIso(
+        s: String
+    ): String = try {
+
+        SimpleDateFormat(
+            "dd-MM-yyyy",
+            Locale.US
+        )
+            .parse(s)
+            ?.let {
+
+                SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.US
+                ).format(it)
+
+            } ?: s
+
+    } catch(_: Exception){
+
+        s
+    }
+
+    private fun append(
+        s: String
+    ){
+
+        runOnUiThread {
+
+            log.append(
+                "\n" + s
+            )
+
+            (log.parent as? ScrollView)
+                ?.fullScroll(
+                    View.FOCUS_DOWN
+                )
+        }
+    }
+
+    private fun setStatus(
+        s: String
+    ){
+
+        runOnUiThread {
+
+            status.text =
+                "Status: $s"
+        }
+    }
+
+    override fun onDestroy(){
+
+        running = false
+
+        handler.removeCallbacksAndMessages(
+            null
+        )
+
+        executor.shutdownNow()
+
+        super.onDestroy()
+    }
+}
