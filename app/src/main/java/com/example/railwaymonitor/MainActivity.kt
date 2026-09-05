@@ -34,16 +34,22 @@ class MainActivity : Activity() {
     private lateinit var tokenEdit: EditText
     private lateinit var chatEdit: EditText
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
+    private val handler =
+        Handler(Looper.getMainLooper())
+
+    private val executor =
+        Executors.newSingleThreadExecutor()
 
     private var running = false
+
     private var routeIndex = 0
+
     private var cycle = 1
 
     private var targetDate = "07-09-2026"
 
     private val routes = listOf(
+
         Pair("Sylhet", "Dhaka"),
         Pair("Maijgaon", "Dhaka"),
         Pair("Kulaura", "Dhaka"),
@@ -59,36 +65,76 @@ class MainActivity : Activity() {
         Pair("Shaistaganj", "Biman_Bandar")
     )
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
         super.onCreate(savedInstanceState)
 
-        setContentView(R.layout.activity_main)
+        setContentView(
+            R.layout.activity_main
+        )
 
-        web = findViewById(R.id.webView)
-        log = findViewById(R.id.logText)
-        status = findViewById(R.id.statusText)
-        dateEdit = findViewById(R.id.dateEdit)
-        tokenEdit = findViewById(R.id.tokenEdit)
-        chatEdit = findViewById(R.id.chatEdit)
+        web =
+            findViewById(R.id.webView)
 
-        val startButton = findViewById<Button>(R.id.startButton)
-        val stopButton = findViewById<Button>(R.id.stopButton)
-        val dateButton = findViewById<Button>(R.id.dateButton)
+        log =
+            findViewById(R.id.logText)
 
-        val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        status =
+            findViewById(R.id.statusText)
+
+        dateEdit =
+            findViewById(R.id.dateEdit)
+
+        tokenEdit =
+            findViewById(R.id.tokenEdit)
+
+        chatEdit =
+            findViewById(R.id.chatEdit)
+
+        val startButton =
+            findViewById<Button>(
+                R.id.startButton
+            )
+
+        val stopButton =
+            findViewById<Button>(
+                R.id.stopButton
+            )
+
+        val dateButton =
+            findViewById<Button>(
+                R.id.dateButton
+            )
+
+        val prefs =
+            getSharedPreferences(
+                "settings",
+                Context.MODE_PRIVATE
+            )
 
         targetDate =
-            prefs.getString("date", "07-09-2026")
-                ?: "07-09-2026"
+            prefs.getString(
+                "date",
+                "07-09-2026"
+            ) ?: "07-09-2026"
 
-        dateEdit.setText(targetDate)
+        dateEdit.setText(
+            targetDate
+        )
 
         tokenEdit.setText(
-            prefs.getString("token", "") ?: ""
+            prefs.getString(
+                "token",
+                ""
+            ) ?: ""
         )
 
         chatEdit.setText(
-            prefs.getString("chat", "") ?: ""
+            prefs.getString(
+                "chat",
+                ""
+            ) ?: ""
         )
 
         setupWebView()
@@ -105,13 +151,16 @@ class MainActivity : Activity() {
             stopMonitor()
         }
 
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
+        if (
+            android.os.Build.VERSION.SDK_INT >= 33
+        ) {
 
             if (
                 checkSelfPermission(
                     Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
+
                 requestPermissions(
                     arrayOf(
                         Manifest.permission.POST_NOTIFICATIONS
@@ -124,61 +173,58 @@ class MainActivity : Activity() {
 
     private fun setupWebView() {
 
-        val settings = web.settings
+        val settings =
+            web.settings
 
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.databaseEnabled = true
-        settings.loadsImagesAutomatically = true
-        settings.javaScriptCanOpenWindowsAutomatically = true
-        settings.cacheMode = WebSettings.LOAD_DEFAULT
+        settings.javaScriptEnabled =
+            true
+
+        settings.domStorageEnabled =
+            true
+
+        settings.databaseEnabled =
+            true
+
+        settings.loadsImagesAutomatically =
+            true
+
+        settings.javaScriptCanOpenWindowsAutomatically =
+            true
+
+        settings.cacheMode =
+            WebSettings.LOAD_DEFAULT
 
         settings.userAgentString =
             settings.userAgentString +
                     " RailwayMonitorApp/1.0"
 
-        web.webViewClient = object : WebViewClient() {
+        web.webViewClient =
+            object : WebViewClient() {
 
-            override fun onPageFinished(
-                view: WebView?,
-                url: String?
-            ) {
-                super.onPageFinished(view, url)
+                override fun onPageFinished(
+                    view: WebView?,
+                    url: String?
+                ) {
 
-                append(
-                    "PAGE LOADED: ${url ?: ""}"
-                )
+                    super.onPageFinished(
+                        view,
+                        url
+                    )
 
-                if (running) {
+                    append(
+                        "PAGE LOADED: ${url ?: ""}"
+                    )
 
-                    status.post {
-                        status.text = "Page loaded"
-                    }
+                    if (running) {
 
-                    /*
-                     * Initial home page-এর Search button
-                     * page load হওয়ার পরও auto-click করার চেষ্টা।
-                     */
-                    if (
-                        url != null &&
-                        url.contains(
-                            "eticket.railway.gov.bd"
-                        ) &&
-                        !url.contains(
-                            "/booking/train/search"
-                        )
-                    ) {
-                        handler.postDelayed({
+                        status.post {
 
-                            if (running) {
-                                clickFirstSearch(0)
-                            }
-
-                        }, 500)
+                            status.text =
+                                "Page loaded"
+                        }
                     }
                 }
             }
-        }
 
         web.webChromeClient =
             WebChromeClient()
@@ -190,7 +236,8 @@ class MainActivity : Activity() {
 
     private fun pickDate() {
 
-        val cal = Calendar.getInstance()
+        val cal =
+            Calendar.getInstance()
 
         try {
 
@@ -200,13 +247,14 @@ class MainActivity : Activity() {
                     Locale.US
                 )
 
-            val d =
+            val parsed =
                 sdf.parse(
-                    dateEdit.text.toString()
+                    dateEdit.text
+                        .toString()
                 )
 
-            if (d != null) {
-                cal.time = d
+            if (parsed != null) {
+                cal.time = parsed
             }
 
         } catch (_: Exception) {
@@ -214,13 +262,13 @@ class MainActivity : Activity() {
 
         DatePickerDialog(
             this,
-            { _, year, month, dayOfMonth ->
+            { _, year, month, day ->
 
                 targetDate =
                     String.format(
                         Locale.US,
                         "%02d-%02d-%04d",
-                        dayOfMonth,
+                        day,
                         month + 1,
                         year
                     )
@@ -248,7 +296,9 @@ class MainActivity : Activity() {
 
         if (
             !date.matches(
-                Regex("\\d{2}-\\d{2}-\\d{4}")
+                Regex(
+                    "\\d{2}-\\d{2}-\\d{4}"
+                )
             )
         ) {
 
@@ -261,7 +311,8 @@ class MainActivity : Activity() {
             return
         }
 
-        targetDate = date
+        targetDate =
+            date
 
         getSharedPreferences(
             "settings",
@@ -287,111 +338,140 @@ class MainActivity : Activity() {
             .apply()
 
         running = true
+
         routeIndex = 0
+
         cycle = 1
 
         append("")
+
         append(
             "======================================"
         )
+
         append(
             "BANGLADESH RAILWAY MULTI-ROUTE MONITOR"
         )
-        append(
-            "======================================"
-        )
-        append("Date  : $targetDate")
-        append("Routes: ${routes.size}")
-        append("Cycle : $cycle")
+
         append(
             "======================================"
         )
 
-        status.text = "Monitoring started"
+        append(
+            "Date  : $targetDate"
+        )
 
-        runRoute(0)
+        append(
+            "Routes: ${routes.size}"
+        )
+
+        append(
+            "Cycle : $cycle"
+        )
+
+        append(
+            "======================================"
+        )
+
+        status.text =
+            "Monitoring started"
+
+        /*
+         * ALWAYS প্রথম route Home page থেকে।
+         */
+        startRouteFromHome(0)
     }
 
     private fun stopMonitor() {
 
         running = false
 
-        handler.removeCallbacksAndMessages(null)
+        handler.removeCallbacksAndMessages(
+            null
+        )
 
         append("")
-        append("MONITORING STOPPED")
 
-        status.text = "Stopped"
+        append(
+            "MONITORING STOPPED"
+        )
+
+        status.text =
+            "Stopped"
     }
 
-    /**
-     * Route 0 এবং Route 6 নতুন search group শুরু করে।
-     *
-     * Route 1-5 এবং Route 7-11:
-     * result page-এর প্রথম Search ব্যবহার করে।
+    /*
+     * =========================================================
+     * HOME → ROUTE
+     * =========================================================
      */
-    private fun runRoute(index: Int) {
+
+    private fun startRouteFromHome(
+        index: Int
+    ) {
 
         if (!running) return
 
-        if (index !in routes.indices) return
+        if (
+            index !in routes.indices
+        ) return
 
-        routeIndex = index
+        routeIndex =
+            index
 
-        val from = routes[index].first
-        val to = routes[index].second
+        val from =
+            routes[index].first
+
+        val to =
+            routes[index].second
 
         append("")
+
         append(
             "######################################"
         )
+
         append(
             "MONITORING ROUTE ${index + 1}/${routes.size}"
         )
-        append("FROM : $from")
-        append("TO   : $to")
-        append("DATE : $targetDate")
+
+        append(
+            "FROM : $from"
+        )
+
+        append(
+            "TO   : $to"
+        )
+
+        append(
+            "DATE : $targetDate"
+        )
+
         append(
             "######################################"
         )
 
-        status.text = "$from → $to"
+        status.text =
+            "$from → $to"
 
-        /*
-         * Route 0 এবং Route 6:
-         * নতুন group — Home page থেকে শুরু।
-         */
-        if (index == 0 || index == 6) {
+        web.loadUrl(
+            "https://eticket.railway.gov.bd/"
+        )
 
-            web.loadUrl(
-                "https://eticket.railway.gov.bd/"
-            )
-
-            waitForHomeAndFill(
-                index,
-                0
-            )
-
-        } else {
-
-            /*
-             * একই result page থেকে next route।
-             */
-            waitForTwoSearchButtons(
-                index,
-                0
-            )
-        }
+        waitForHome(
+            index,
+            0
+        )
     }
 
-    private fun waitForHomeAndFill(
+    private fun waitForHome(
         index: Int,
         attempt: Int
     ) {
 
         if (!running) return
 
-        if (attempt > 80) {
+        if (attempt > 100) {
 
             append(
                 "Home page timeout. Retrying..."
@@ -400,7 +480,9 @@ class MainActivity : Activity() {
             handler.postDelayed({
 
                 if (running) {
-                    runRoute(index)
+                    startRouteFromHome(
+                        index
+                    )
                 }
 
             }, 1000)
@@ -423,25 +505,36 @@ class MainActivity : Activity() {
             handler.postDelayed({
 
                 if (running) {
-                    fillAndSearch(index)
+
+                    fillHomeForm(
+                        index
+                    )
                 }
 
-            }, 300)
+            }, 500)
 
         } else {
 
             handler.postDelayed({
 
-                waitForHomeAndFill(
+                waitForHome(
                     index,
                     attempt + 1
                 )
 
-            }, 150)
+            }, 200)
         }
     }
 
-    private fun fillAndSearch(index: Int) {
+    /*
+     * =========================================================
+     * HOME FORM
+     * =========================================================
+     */
+
+    private fun fillHomeForm(
+        index: Int
+    ) {
 
         if (!running) return
 
@@ -451,7 +544,7 @@ class MainActivity : Activity() {
         val to =
             routes[index].second
 
-        val isoDate =
+        val iso =
             toIso(targetDate)
 
         val js = """
@@ -464,7 +557,7 @@ class MainActivity : Activity() {
                     ${JSONObject.quote(to)};
 
                 const TARGET =
-                    ${JSONObject.quote(isoDate)};
+                    ${JSONObject.quote(iso)};
 
                 function visible(el) {
 
@@ -484,7 +577,7 @@ class MainActivity : Activity() {
                     );
                 }
 
-                function nativeValue(
+                function setNative(
                     el,
                     value
                 ) {
@@ -504,7 +597,8 @@ class MainActivity : Activity() {
 
                     } catch(e) {
 
-                        el.value = value;
+                        el.value =
+                            value;
                     }
                 }
 
@@ -544,10 +638,7 @@ class MainActivity : Activity() {
                             name + '"]',
 
                         'input[id*="' +
-                            name + '"]',
-
-                        'input[placeholder*="' +
-                            name + '" i]'
+                            name + '"]'
                     ];
 
                     for (
@@ -568,6 +659,7 @@ class MainActivity : Activity() {
                             if (
                                 visible(el)
                             ) {
+
                                 return el;
                             }
                         }
@@ -576,7 +668,7 @@ class MainActivity : Activity() {
                     return null;
                 }
 
-                function typeCity(
+                function typeInput(
                     name,
                     value
                 ) {
@@ -590,7 +682,7 @@ class MainActivity : Activity() {
 
                     input.focus();
 
-                    nativeValue(
+                    setNative(
                         input,
                         ''
                     );
@@ -600,12 +692,7 @@ class MainActivity : Activity() {
                         'input'
                     );
 
-                    fire(
-                        input,
-                        'change'
-                    );
-
-                    nativeValue(
+                    setNative(
                         input,
                         value
                     );
@@ -633,81 +720,24 @@ class MainActivity : Activity() {
                     return true;
                 }
 
-                function closePopup() {
-
-                    const elements =
-                        document.querySelectorAll(
-                            'button, input, [role="button"]'
-                        );
-
-                    const texts = [
-                        'I Agree',
-                        'Agree',
-                        'OK',
-                        'Accept',
-                        'Close'
-                    ];
-
-                    for (
-                        const el
-                        of elements
-                    ) {
-
-                        if (
-                            !visible(el)
-                        ) continue;
-
-                        const text =
-                            (
-                                el.innerText ||
-                                el.textContent ||
-                                el.value ||
-                                ''
-                            )
-                            .trim()
-                            .toLowerCase();
-
-                        for (
-                            const t
-                            of texts
-                        ) {
-
-                            if (
-                                text ===
-                                t.toLowerCase()
-                            ) {
-
-                                try {
-                                    el.click();
-                                } catch(e) {}
-                            }
-                        }
-                    }
-                }
-
-                closePopup();
-
-                const fromOk =
-                    typeCity(
-                        'fromcity',
-                        FROM
-                    );
+                typeInput(
+                    'fromcity',
+                    FROM
+                );
 
                 setTimeout(
                     function() {
 
-                        typeCity(
+                        typeInput(
                             'tocity',
                             TO
                         );
 
                     },
-                    600
+                    700
                 );
 
-                return JSON.stringify({
-                    from: fromOk
-                });
+                return 'OK';
 
             })();
         """.trimIndent()
@@ -718,33 +748,41 @@ class MainActivity : Activity() {
 
                 if (running) {
 
-                    selectAutocompleteAndSyncDate(
+                    selectCities(
                         index,
                         0
                     )
                 }
 
-            }, 1200)
+            }, 1300)
         }
     }
 
-    private fun selectAutocompleteAndSyncDate(
+    /*
+     * =========================================================
+     * AUTOCOMPLETE
+     * =========================================================
+     */
+
+    private fun selectCities(
         index: Int,
         attempt: Int
     ) {
 
         if (!running) return
 
-        if (attempt > 30) {
+        if (attempt > 40) {
 
             append(
-                "Autocomplete timeout. Retrying route..."
+                "Station selection timeout."
             )
 
             handler.postDelayed({
 
                 if (running) {
-                    runRoute(index)
+                    startRouteFromHome(
+                        index
+                    )
                 }
 
             }, 1000)
@@ -795,52 +833,7 @@ class MainActivity : Activity() {
                     .toLowerCase();
                 }
 
-                function findInput(
-                    name
-                ) {
-
-                    const selectors = [
-
-                        'input[formcontrolname="' +
-                            name + '"]',
-
-                        'input[name="' +
-                            name + '"]',
-
-                        'input[id="' +
-                            name + '"]',
-
-                        'input[id*="' +
-                            name + '"]'
-                    ];
-
-                    for (
-                        const selector
-                        of selectors
-                    ) {
-
-                        const list =
-                            document.querySelectorAll(
-                                selector
-                            );
-
-                        for (
-                            const el
-                            of list
-                        ) {
-
-                            if (
-                                visible(el)
-                            ) {
-                                return el;
-                            }
-                        }
-                    }
-
-                    return null;
-                }
-
-                function clickOptionFor(
+                function clickOption(
                     value
                 ) {
 
@@ -855,8 +848,8 @@ class MainActivity : Activity() {
                         '.ng-option',
                         'mat-option',
                         '.autocomplete-option',
-                        '[class*="autocomplete"] li',
                         '[class*="suggestion"]',
+                        '[class*="autocomplete"] li',
                         '[class*="option"]'
                     ];
 
@@ -888,7 +881,8 @@ class MainActivity : Activity() {
                                     ''
                                 );
 
-                            if (!text) continue;
+                            if (!text)
+                                continue;
 
                             if (
                                 text === target ||
@@ -936,28 +930,6 @@ class MainActivity : Activity() {
 
                             el.dispatchEvent(
                                 new MouseEvent(
-                                    'mousedown',
-                                    {
-                                        bubbles: true,
-                                        cancelable: true,
-                                        view: window
-                                    }
-                                )
-                            );
-
-                            el.dispatchEvent(
-                                new MouseEvent(
-                                    'mouseup',
-                                    {
-                                        bubbles: true,
-                                        cancelable: true,
-                                        view: window
-                                    }
-                                )
-                            );
-
-                            el.dispatchEvent(
-                                new MouseEvent(
                                     'click',
                                     {
                                         bubbles: true,
@@ -973,47 +945,20 @@ class MainActivity : Activity() {
                     return true;
                 }
 
-                const fromInput =
-                    findInput(
-                        'fromcity'
-                    );
-
-                const toInput =
-                    findInput(
-                        'tocity'
-                    );
-
-                const fromBefore =
-                    fromInput
-                        ? norm(fromInput.value)
-                        : '';
-
-                const toBefore =
-                    toInput
-                        ? norm(toInput.value)
-                        : '';
-
-                const fromClicked =
-                    clickOptionFor(FROM);
+                const fromOk =
+                    clickOption(FROM);
 
                 setTimeout(
                     function() {
 
-                        clickOptionFor(TO);
+                        clickOption(TO);
 
                     },
-                    600
+                    700
                 );
 
                 return JSON.stringify({
-                    fromClicked:
-                        fromClicked,
-
-                    fromValue:
-                        fromBefore,
-
-                    toValue:
-                        toBefore
+                    from: fromOk
                 });
 
             })();
@@ -1025,7 +970,7 @@ class MainActivity : Activity() {
 
                 if (running) {
 
-                    forceFinalDateSyncAndSearch(
+                    syncDateAndSearch(
                         index,
                         0
                     )
@@ -1035,11 +980,13 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * Target date-টি Railway Angular form-এর
-     * DOJ control-এ force sync করে।
+    /*
+     * =========================================================
+     * DATE SYNC
+     * =========================================================
      */
-    private fun forceFinalDateSyncAndSearch(
+
+    private fun syncDateAndSearch(
         index: Int,
         attempt: Int
     ) {
@@ -1052,14 +999,13 @@ class MainActivity : Activity() {
                 "Date synchronization timeout."
             )
 
-            append(
-                "Restarting current route..."
-            )
-
             handler.postDelayed({
 
                 if (running) {
-                    runRoute(index)
+
+                    startRouteFromHome(
+                        index
+                    )
                 }
 
             }, 1000)
@@ -1067,14 +1013,14 @@ class MainActivity : Activity() {
             return
         }
 
-        val isoDate =
+        val iso =
             toIso(targetDate)
 
         val js = """
             (function() {
 
                 const TARGET =
-                    ${JSONObject.quote(isoDate)};
+                    ${JSONObject.quote(iso)};
 
                 function visible(el) {
 
@@ -1094,7 +1040,7 @@ class MainActivity : Activity() {
                     );
                 }
 
-                function nativeValue(
+                function setNative(
                     el,
                     value
                 ) {
@@ -1114,7 +1060,8 @@ class MainActivity : Activity() {
 
                     } catch(e) {
 
-                        el.value = value;
+                        el.value =
+                            value;
                     }
                 }
 
@@ -1138,91 +1085,55 @@ class MainActivity : Activity() {
                     } catch(e) {}
                 }
 
-                function findDateInput() {
+                const selectors = [
 
-                    const selectors = [
+                    'input[formcontrolname="doj"]',
+                    'input[name="doj"]',
+                    'input[id="doj"]',
+                    'input[id*="doj" i]',
+                    'input[placeholder*="date" i]'
+                ];
 
-                        'input[formcontrolname="doj"]',
-                        'input[name="doj"]',
-                        'input[id="doj"]',
-                        'input[id*="doj" i]',
-                        'input[placeholder*="date" i]',
-                        'input[placeholder*="journey" i]'
-                    ];
+                let input = null;
+
+                for (
+                    const selector
+                    of selectors
+                ) {
+
+                    const list =
+                        document.querySelectorAll(
+                            selector
+                        );
 
                     for (
-                        const selector
-                        of selectors
+                        const el
+                        of list
                     ) {
 
-                        const list =
-                            document.querySelectorAll(
-                                selector
-                            );
-
-                        for (
-                            const el
-                            of list
-                        ) {
-
-                            if (
-                                visible(el)
-                            ) {
-                                return el;
-                            }
-                        }
-                    }
-
-                    return null;
-                }
-
-                function findAngularControl() {
-
-                    const input =
-                        findDateInput();
-
-                    if (!input) {
-                        return null;
-                    }
-
-                    try {
-
-                        const ng =
-                            window.ng;
-
                         if (
-                            ng &&
-                            ng.getOwningComponent
+                            visible(el)
                         ) {
 
-                            return {
-                                input: input
-                            };
+                            input = el;
+                            break;
                         }
+                    }
 
-                    } catch(e) {}
-
-                    return {
-                        input: input
-                    };
+                    if (input)
+                        break;
                 }
 
-                const result =
-                    findAngularControl();
-
-                if (!result) {
+                if (!input) {
 
                     return JSON.stringify({
                         ok: false
                     });
                 }
 
-                const input =
-                    result.input;
-
                 input.focus();
 
-                nativeValue(
+                setNative(
                     input,
                     TARGET
                 );
@@ -1242,100 +1153,76 @@ class MainActivity : Activity() {
                     'blur'
                 );
 
-                /*
-                 * Angular event chain.
-                 */
                 try {
 
                     input.dispatchEvent(
-                        new Event(
+                        new KeyboardEvent(
                             'keyup',
                             {
+                                key: 'Enter',
                                 bubbles: true
                             }
                         )
                     );
-
-                    input.dispatchEvent(
-                        new Event(
-                            'keydown',
-                            {
-                                bubbles: true
-                            }
-                        )
-                    );
-
-                } catch(e) {}
-
-                /*
-                 * Try Angular FormControl.
-                 */
-                try {
-
-                    const injector =
-                        window.ng &&
-                        window.ng.getInjector
-                            ? window.ng.getInjector(input)
-                            : null;
-
-                    if (injector) {
-
-                        const formControl =
-                            injector.get
-                                ? null
-                                : null;
-
-                        void formControl;
-                    }
 
                 } catch(e) {}
 
                 return JSON.stringify({
                     ok: true,
-                    value: input.value,
-                    target: TARGET
+                    value:
+                        input.value,
+                    target:
+                        TARGET
                 });
 
             })();
         """.trimIndent()
 
-        eval(js) { result ->
+        eval(js) {
 
             handler.postDelayed({
 
-                if (!running) return@postDelayed
+                if (running) {
 
-                /*
-                 * Date sync হওয়ার পর Search button
-                 * খুঁজে click করা হবে।
-                 */
-                clickFirstSearchAfterDate(
-                    index,
-                    0
-                )
+                    clickInitialSearch(
+                        index,
+                        0
+                    )
+                }
 
-            }, 700)
+            }, 800)
         }
     }
 
-    /**
-     * Initial/Home Search.
-     *
-     * Route text যাচাই করা হয় না।
-     * Enabled + visible প্রথম Search button
-     * পাওয়া মাত্র click করার চেষ্টা।
+    /*
+     * =========================================================
+     * INITIAL SEARCH
+     * =========================================================
      */
-    private fun clickFirstSearch(
+
+    private fun clickInitialSearch(
+        index: Int,
         attempt: Int
     ) {
 
         if (!running) return
 
-        if (attempt > 100) {
+        if (attempt > 120) {
 
             append(
                 "Initial Search button timeout."
             )
+
+            handler.postDelayed({
+
+                if (running) {
+
+                    startRouteFromHome(
+                        index
+                    )
+                }
+
+            }, 1000)
 
             return
         }
@@ -1367,7 +1254,9 @@ class MainActivity : Activity() {
                         el.innerText ||
                         el.textContent ||
                         el.value ||
-                        el.getAttribute('aria-label') ||
+                        el.getAttribute(
+                            'aria-label'
+                        ) ||
                         ''
                     )
                     .trim()
@@ -1417,8 +1306,7 @@ class MainActivity : Activity() {
                         } catch(e) {}
 
                         return JSON.stringify({
-                            clicked: true,
-                            text: text
+                            clicked: true
                         });
                     }
                 }
@@ -1440,7 +1328,12 @@ class MainActivity : Activity() {
             ) {
 
                 append(
-                    "Initial Search button clicked."
+                    "INITIAL SEARCH CLICKED."
+                )
+
+                waitForResult(
+                    index,
+                    0
                 )
 
             } else {
@@ -1448,7 +1341,9 @@ class MainActivity : Activity() {
                 handler.postDelayed({
 
                     if (running) {
-                        clickFirstSearch(
+
+                        clickInitialSearch(
+                            index,
                             attempt + 1
                         )
                     }
@@ -1458,29 +1353,700 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun clickFirstSearchAfterDate(
+    /*
+     * =========================================================
+     * RESULT PAGE LOAD
+     * =========================================================
+     */
+
+    private fun waitForResult(
         index: Int,
         attempt: Int
     ) {
 
         if (!running) return
 
-        if (attempt > 100) {
+        if (attempt > 240) {
 
             append(
-                "Search button not ready. Retrying..."
+                "Result page timeout."
+            )
+
+            append(
+                "Restarting route from Home..."
             )
 
             handler.postDelayed({
 
                 if (running) {
-                    forceFinalDateSyncAndSearch(
-                        index,
-                        attempt + 1
+
+                    startRouteFromHome(
+                        index
                     )
                 }
 
-            }, 500)
+            }, 1000)
+
+            return
+        }
+
+        val url =
+            web.url ?: ""
+
+        if (
+            url.contains(
+                "/booking/train/search"
+            )
+        ) {
+
+            /*
+             * URL এসেছে।
+             * কিন্তু DOM পুরোপুরি load হওয়ার
+             * জন্য আরও যাচাই হবে।
+             */
+            checkResultReady(
+                index,
+                0
+            )
+
+        } else {
+
+            handler.postDelayed({
+
+                waitForResult(
+                    index,
+                    attempt + 1
+                )
+
+            }, 250)
+        }
+    }
+
+    /*
+     * =========================================================
+     * RESULT READY + TICKET / NO TICKET
+     * =========================================================
+     */
+
+    private fun checkResultReady(
+        index: Int,
+        attempt: Int
+    ) {
+
+        if (!running) return
+
+        if (attempt > 240) {
+
+            append(
+                "Result DOM load timeout."
+            )
+
+            handler.postDelayed({
+
+                if (running) {
+
+                    startRouteFromHome(
+                        index
+                    )
+                }
+
+            }, 1000)
+
+            return
+        }
+
+        val js = """
+            (function() {
+
+                const body =
+                    (
+                        document.body
+                            ?.innerText ||
+                        ''
+                    )
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                const lower =
+                    body.toLowerCase();
+
+                const noTicket =
+                    lower.includes(
+                        'not finding any ticket for your desired route'
+                    );
+
+                /*
+                 * Search button count.
+                 * Result page-এ দুইটি Search
+                 * button সাধারণত তখনই DOM-এ থাকে।
+                 */
+                const elements =
+                    document.querySelectorAll(
+                        'button, input[type="submit"], input[type="button"], [role="button"]'
+                    );
+
+                let searchCount = 0;
+
+                function visible(el) {
+
+                    if (!el) return false;
+
+                    const r =
+                        el.getBoundingClientRect();
+
+                    const s =
+                        getComputedStyle(el);
+
+                    return (
+                        r.width > 0 &&
+                        r.height > 0 &&
+                        s.display !== 'none' &&
+                        s.visibility !== 'hidden'
+                    );
+                }
+
+                function textOf(el) {
+
+                    return (
+                        el.innerText ||
+                        el.textContent ||
+                        el.value ||
+                        el.getAttribute(
+                            'aria-label'
+                        ) ||
+                        ''
+                    )
+                    .trim()
+                    .toLowerCase();
+                }
+
+                for (
+                    const el
+                    of elements
+                ) {
+
+                    if (!visible(el))
+                        continue;
+
+                    const text =
+                        textOf(el);
+
+                    if (
+                        text === 'search' ||
+                        text.includes('search')
+                    ) {
+
+                        searchCount++;
+                    }
+                }
+
+                /*
+                 * Ticket indicators.
+                 *
+                 * No-ticket message থাকলে
+                 * কখনো ticketFound true হবে না।
+                 */
+                let ticketFound = false;
+
+                if (!noTicket) {
+
+                    const ticketWords = [
+
+                        'book now',
+                        'available',
+                        'seat available',
+                        'seats available',
+                        'select seat',
+                        'booking available'
+                    ];
+
+                    for (
+                        const word
+                        of ticketWords
+                    ) {
+
+                        if (
+                            lower.includes(word)
+                        ) {
+
+                            ticketFound = true;
+                            break;
+                        }
+                    }
+                }
+
+                /*
+                 * Railway result DOM-এ সাধারণত train
+                 * result rows/cards/table rows থাকে।
+                 *
+                 * সম্ভাব্য selectors গুলো count করা হচ্ছে।
+                 */
+                let rows = 0;
+
+                const rowSelectors = [
+
+                    'table tbody tr',
+                    'table tr',
+                    '[class*="train"]',
+                    '[class*="Train"]',
+                    '[class*="result"]',
+                    '[class*="Result"]',
+                    '[class*="trip"]',
+                    '[class*="Trip"]'
+                ];
+
+                const seen = [];
+
+                for (
+                    const selector
+                    of rowSelectors
+                ) {
+
+                    const list =
+                        document.querySelectorAll(
+                            selector
+                        );
+
+                    for (
+                        const el
+                        of list
+                    ) {
+
+                        if (
+                            !visible(el)
+                        ) continue;
+
+                        const text =
+                            (
+                                el.innerText ||
+                                el.textContent ||
+                                ''
+                            )
+                            .replace(
+                                /\s+/g,
+                                ' '
+                            )
+                            .trim();
+
+                        if (
+                            text.length < 10
+                        ) continue;
+
+                        if (
+                            seen.indexOf(el) === -1
+                        ) {
+
+                            seen.push(el);
+                            rows++;
+                        }
+                    }
+                }
+
+                return JSON.stringify({
+
+                    noTicket:
+                        noTicket,
+
+                    ticketFound:
+                        ticketFound,
+
+                    searchCount:
+                        searchCount,
+
+                    rows:
+                        rows,
+
+                    bodyLength:
+                        body.length
+
+                });
+
+            })();
+        """.trimIndent()
+
+        eval(js) { result ->
+
+            if (result == null) {
+
+                handler.postDelayed({
+
+                    if (running) {
+
+                        checkResultReady(
+                            index,
+                            attempt + 1
+                        )
+                    }
+
+                }, 300)
+
+                return@eval
+            }
+
+            val text =
+                result.toString()
+
+            val noTicket =
+                text.contains(
+                    "\"noTicket\":true"
+                )
+
+            val ticketFound =
+                text.contains(
+                    "\"ticketFound\":true"
+                )
+
+            val searchCount =
+                Regex(
+                    "\"searchCount\":(\\d+)"
+                )
+                    .find(text)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: 0
+
+            val rows =
+                Regex(
+                    "\"rows\":(\\d+)"
+                )
+                    .find(text)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: 0
+
+            /*
+             * -------------------------------------------------
+             * NO TICKET
+             * -------------------------------------------------
+             */
+
+            if (noTicket) {
+
+                append(
+                    "NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE"
+                )
+
+                append(
+                    "No ticket. Using FIRST Search button for next route."
+                )
+
+                waitForFirstResultSearch(
+                    index,
+                    0
+                )
+
+                return@eval
+            }
+
+            /*
+             * -------------------------------------------------
+             * TICKET FOUND
+             * -------------------------------------------------
+             */
+
+            if (ticketFound) {
+
+                append(
+                    "TICKET FOUND!"
+                )
+
+                /*
+                 * Available train/row count বের করার চেষ্টা।
+                 */
+                val count =
+                    findTicketCount(
+                        index,
+                        rows
+                    )
+
+                sendTelegram(
+
+                    "🚨 BANGLADESH RAILWAY TICKET FOUND 🚨\n\n" +
+
+                            "Route: " +
+                            routes[index].first +
+                            " → " +
+                            routes[index].second +
+                            "\n" +
+
+                            "Date: " +
+                            targetDate +
+                            "\n" +
+
+                            "Class: S_CHAIR\n" +
+
+                            "Available result/train count: " +
+                            count +
+                            "\n\n" +
+
+                            "Please check immediately."
+                )
+
+                /*
+                 * অত্যন্ত গুরুত্বপূর্ণ:
+                 *
+                 * Ticket পাওয়া গেলে result page-এর
+                 * Search ব্যবহার করা যাবে না।
+                 *
+                 * পরের route অবশ্যই Home থেকে।
+                 */
+                append(
+                    "Ticket found. Next route will start from HOME."
+                )
+
+                moveToNextFromHome(
+                    index
+                )
+
+                return@eval
+            }
+
+            /*
+             * -------------------------------------------------
+             * RESULT PAGE LOADED BUT DECISION NOT CLEAR
+             * -------------------------------------------------
+             *
+             * Search button দুইটি থাকলে DOM ready ধরে
+             * আবার check করি।
+             */
+            if (
+                searchCount >= 2
+            ) {
+
+                handler.postDelayed({
+
+                    if (running) {
+
+                        checkResultReady(
+                            index,
+                            attempt + 1
+                        )
+                    }
+
+                }, 500)
+
+            } else {
+
+                /*
+                 * Page এখনও render হচ্ছে।
+                 */
+                handler.postDelayed({
+
+                    if (running) {
+
+                        checkResultReady(
+                            index,
+                            attempt + 1
+                        )
+                    }
+
+                }, 400)
+            }
+        }
+    }
+
+    /*
+     * =========================================================
+     * TICKET COUNT
+     * =========================================================
+     *
+     * এখানে route text ব্যবহার করা হয় না।
+     * Result page-এর সম্ভাব্য train/result row count
+     * বের করা হয়।
+     */
+
+    private fun findTicketCount(
+        index: Int,
+        detectedRows: Int
+    ): Int {
+
+        /*
+         * প্রথমে DOM থেকে আরও নির্দিষ্ট count।
+         */
+        val js = """
+            (function() {
+
+                function visible(el) {
+
+                    if (!el) return false;
+
+                    const r =
+                        el.getBoundingClientRect();
+
+                    const s =
+                        getComputedStyle(el);
+
+                    return (
+                        r.width > 0 &&
+                        r.height > 0 &&
+                        s.display !== 'none' &&
+                        s.visibility !== 'hidden'
+                    );
+                }
+
+                const selectors = [
+
+                    'table tbody tr',
+                    '[class*="train-card"]',
+                    '[class*="train-card-item"]',
+                    '[class*="train-row"]',
+                    '[class*="train-item"]',
+                    '[class*="result-card"]',
+                    '[class*="result-item"]'
+                ];
+
+                const unique = [];
+
+                for (
+                    const selector
+                    of selectors
+                ) {
+
+                    const list =
+                        document.querySelectorAll(
+                            selector
+                        );
+
+                    for (
+                        const el
+                        of list
+                    ) {
+
+                        if (
+                            !visible(el)
+                        ) continue;
+
+                        const text =
+                            (
+                                el.innerText ||
+                                el.textContent ||
+                                ''
+                            )
+                            .replace(
+                                /\s+/g,
+                                ' '
+                            )
+                            .trim()
+                            .toLowerCase();
+
+                        if (!text)
+                            continue;
+
+                        /*
+                         * Rows containing actual availability
+                         * signals.
+                         */
+                        if (
+                            text.includes(
+                                'available'
+                            ) ||
+                            text.includes(
+                                'book now'
+                            ) ||
+                            text.includes(
+                                'select seat'
+                            ) ||
+                            text.includes(
+                                'seat'
+                            )
+                        ) {
+
+                            if (
+                                unique.indexOf(
+                                    el
+                                ) === -1
+                            ) {
+
+                                unique.push(el);
+                            }
+                        }
+                    }
+                }
+
+                return String(
+                    unique.length
+                );
+
+            })();
+        """.trimIndent()
+
+        var finalCount =
+            detectedRows
+
+        web.evaluateJavascript(
+            js
+        ) { value ->
+
+            val domCount =
+                value
+                    ?.replace(
+                        "\"",
+                        ""
+                    )
+                    ?.toIntOrNull()
+                    ?: 0
+
+            if (
+                domCount > 0
+            ) {
+
+                finalCount =
+                    domCount
+            }
+        }
+
+        /*
+         * evaluateJavascript asynchronous হওয়ায়
+         * fallback হিসেবে detectedRows return।
+         */
+        return if (
+            finalCount > 0
+        ) {
+
+            finalCount
+
+        } else {
+
+            1
+        }
+    }
+
+    /*
+     * =========================================================
+     * NO-TICKET RESULT PAGE
+     * =========================================================
+     *
+     * User-এর নির্দিষ্ট rule:
+     *
+     * "NOT FINDING..." থাকলে
+     * প্রথম Search button click করে
+     * পরের route।
+     *
+     * Route text কোনোভাবেই দেখা হবে না।
+     */
+
+    private fun waitForFirstResultSearch(
+        currentIndex: Int,
+        attempt: Int
+    ) {
+
+        if (!running) return
+
+        if (attempt > 240) {
+
+            append(
+                "First result Search timeout."
+            )
+
+            append(
+                "Restarting next route from HOME."
+            )
+
+            moveToNextFromHome(
+                currentIndex
+            )
 
             return
         }
@@ -1551,39 +2117,61 @@ class MainActivity : Activity() {
                             ) === 'true';
 
                         if (!disabled) {
-                            searches.push(el);
+
+                            searches.push(
+                                el
+                            );
                         }
                     }
                 }
 
+                /*
+                 * প্রথম Search only.
+                 */
                 if (
-                    searches.length === 0
+                    searches.length >= 1
                 ) {
 
+                    try {
+
+                        searches[0].scrollIntoView({
+                            block: 'center'
+                        });
+
+                    } catch(e) {}
+
+                    try {
+
+                        searches[0].click();
+
+                    } catch(e) {
+
+                        try {
+
+                            searches[0].dispatchEvent(
+                                new MouseEvent(
+                                    'click',
+                                    {
+                                        bubbles: true,
+                                        cancelable: true,
+                                        view: window
+                                    }
+                                )
+                            );
+
+                        } catch(e2) {}
+                    }
+
                     return JSON.stringify({
-                        ready: false,
-                        count: 0
+                        clicked: true,
+                        count:
+                            searches.length
                     });
                 }
 
-                /*
-                 * Date sync-এর পরে প্রথম Search।
-                 */
-                try {
-
-                    searches[0].scrollIntoView({
-                        block: 'center'
-                    });
-
-                } catch(e) {}
-
-                try {
-                    searches[0].click();
-                } catch(e) {}
-
                 return JSON.stringify({
-                    ready: true,
-                    count: searches.length
+                    clicked: false,
+                    count: 0
                 });
 
             })();
@@ -1594,16 +2182,20 @@ class MainActivity : Activity() {
             if (
                 result != null &&
                 result.contains(
-                    "\"ready\":true"
+                    "\"clicked\":true"
                 )
             ) {
 
                 append(
-                    "Search clicked after date synchronization."
+                    "FIRST RESULT SEARCH CLICKED."
                 )
 
-                waitForResultPage(
-                    index,
+                /*
+                 * Search click করার পর
+                 * Railway next route-এর result load করবে।
+                 */
+                waitForNextResult(
+                    currentIndex,
                     0
                 )
 
@@ -1613,8 +2205,8 @@ class MainActivity : Activity() {
 
                     if (running) {
 
-                        clickFirstSearchAfterDate(
-                            index,
+                        waitForFirstResultSearch(
+                            currentIndex,
                             attempt + 1
                         )
                     }
@@ -1624,32 +2216,38 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * Result page আসা পর্যন্ত অপেক্ষা।
+    /*
+     * =========================================================
+     * NEXT RESULT AFTER FIRST SEARCH
+     * =========================================================
      *
-     * কোনো fixed 5/30/60 second wait নেই।
-     * Page ready হলেই next processing।
+     * Result page-এর first Search click হওয়ার পর
+     * route change হয়ে নতুন result আসা পর্যন্ত অপেক্ষা।
+     *
+     * এখানেই পরের route-এর fields Railway নিজে
+     * search form অনুযায়ী ব্যবহার করবে।
      */
-    private fun waitForResultPage(
-        index: Int,
+
+    private fun waitForNextResult(
+        currentIndex: Int,
         attempt: Int
     ) {
 
         if (!running) return
 
-        if (attempt > 180) {
+        if (attempt > 240) {
 
             append(
-                "Result page timeout. Restarting..."
+                "Next result timeout."
             )
 
-            handler.postDelayed({
-
-                if (running) {
-                    runRoute(index)
-                }
-
-            }, 1000)
+            /*
+             * নিরাপত্তা:
+             * Home থেকে পরের route শুরু।
+             */
+            moveToNextFromHome(
+                currentIndex
+            )
 
             return
         }
@@ -1667,469 +2265,38 @@ class MainActivity : Activity() {
 
                 if (running) {
 
-                    processResultPage(
-                        index,
+                    /*
+                     * Next route-এর result
+                     * fully rendered কি না check।
+                     */
+                    checkResultReady(
+                        currentIndex + 1,
                         0
                     )
                 }
 
-            }, 200)
+            }, 700)
 
         } else {
 
             handler.postDelayed({
 
-                waitForResultPage(
-                    index,
+                waitForNextResult(
+                    currentIndex,
                     attempt + 1
                 )
 
-            }, 200)
+            }, 250)
         }
     }
 
-    /**
-     * Result page:
-     *
-     * 1. Ticket পাওয়া গেলে Telegram।
-     * 2. No ticket হলে route text দেখা হবে না।
-     * 3. দুইটি Search button পাওয়া গেলে প্রথমটি
-     *    click করে next route।
+    /*
+     * =========================================================
+     * MOVE NEXT FROM HOME
+     * =========================================================
      */
-    private fun processResultPage(
-        index: Int,
-        attempt: Int
-    ) {
 
-        if (!running) return
-
-        if (attempt > 180) {
-
-            append(
-                "Result processing timeout."
-            )
-
-            handler.postDelayed({
-
-                if (running) {
-                    runRoute(index)
-                }
-
-            }, 1000)
-
-            return
-        }
-
-        val js = """
-            (function() {
-
-                function visible(el) {
-
-                    if (!el) return false;
-
-                    const r =
-                        el.getBoundingClientRect();
-
-                    const s =
-                        getComputedStyle(el);
-
-                    return (
-                        r.width > 0 &&
-                        r.height > 0 &&
-                        s.display !== 'none' &&
-                        s.visibility !== 'hidden'
-                    );
-                }
-
-                function textOf(el) {
-
-                    return (
-                        el.innerText ||
-                        el.textContent ||
-                        el.value ||
-                        ''
-                    )
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                }
-
-                const bodyText =
-                    textOf(
-                        document.body
-                    ).toLowerCase();
-
-                /*
-                 * Availability keywords.
-                 * "No ticket" হলে false।
-                 */
-                const noTicket =
-                    bodyText.includes(
-                        'not finding any ticket'
-                    ) ||
-                    bodyText.includes(
-                        'no ticket available'
-                    ) ||
-                    bodyText.includes(
-                        'no seats available'
-                    ) ||
-                    bodyText.includes(
-                        'no train found'
-                    );
-
-                const ticketSignals = [
-
-                    'available',
-                    'seat',
-                    'seats',
-                    'booking',
-                    'select seat',
-                    'book now'
-                ];
-
-                let ticketFound = false;
-
-                if (!noTicket) {
-
-                    for (
-                        const word
-                        of ticketSignals
-                    ) {
-
-                        if (
-                            bodyText.includes(word)
-                        ) {
-
-                            ticketFound = true;
-                            break;
-                        }
-                    }
-                }
-
-                const elements =
-                    document.querySelectorAll(
-                        'button, input[type="submit"], input[type="button"], [role="button"]'
-                    );
-
-                const searches = [];
-
-                for (
-                    const el
-                    of elements
-                ) {
-
-                    if (!visible(el))
-                        continue;
-
-                    const text =
-                        textOf(el)
-                            .toLowerCase();
-
-                    if (
-                        text === 'search' ||
-                        text.includes('search')
-                    ) {
-
-                        const disabled =
-                            el.disabled ||
-                            el.getAttribute(
-                                'aria-disabled'
-                            ) === 'true';
-
-                        if (!disabled) {
-                            searches.push(el);
-                        }
-                    }
-                }
-
-                return JSON.stringify({
-
-                    ticketFound:
-                        ticketFound,
-
-                    noTicket:
-                        noTicket,
-
-                    searchCount:
-                        searches.length
-
-                });
-
-            })();
-        """.trimIndent()
-
-        eval(js) { result ->
-
-            if (result == null) {
-
-                handler.postDelayed({
-
-                    if (running) {
-
-                        processResultPage(
-                            index,
-                            attempt + 1
-                        )
-                    }
-
-                }, 300)
-
-                return@eval
-            }
-
-            val resultText =
-                result.toString()
-
-            val ticketFound =
-                resultText.contains(
-                    "\"ticketFound\":true"
-                )
-
-            val noTicket =
-                resultText.contains(
-                    "\"noTicket\":true"
-                )
-
-            val searchCount =
-                Regex(
-                    "\"searchCount\":(\\d+)"
-                )
-                    .find(resultText)
-                    ?.groupValues
-                    ?.getOrNull(1)
-                    ?.toIntOrNull()
-                    ?: 0
-
-            if (ticketFound) {
-
-                append(
-                    "TICKET AVAILABILITY DETECTED!"
-                )
-
-                append(
-                    "Route: ${routes[index].first} → ${routes[index].second}"
-                )
-
-                sendTelegram(
-                    "🚨 BANGLADESH RAILWAY TICKET FOUND 🚨\n\n" +
-                            "Route: ${routes[index].first} → ${routes[index].second}\n" +
-                            "Date: $targetDate\n" +
-                            "Class: S_CHAIR\n\n" +
-                            "Please check immediately."
-                )
-
-            } else if (noTicket) {
-
-                append(
-                    "NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE"
-                )
-
-            } else {
-
-                append(
-                    "Result page loaded."
-                )
-            }
-
-            /*
-             * User's requested rule:
-             *
-             * No ticket message-এর route text ignore।
-             * শুধু 2 Search button-এর জন্য অপেক্ষা।
-             */
-            if (searchCount >= 2) {
-
-                clickFirstResultSearch(
-                    index
-                )
-
-            } else {
-
-                handler.postDelayed({
-
-                    if (running) {
-
-                        processResultPage(
-                            index,
-                            attempt + 1
-                        )
-                    }
-
-                }, 250)
-            }
-        }
-    }
-
-    /**
-     * Result page-এর দুইটি Search button পাওয়া গেলে
-     * ALWAYS FIRST Search button click।
-     *
-     * Route text একদম যাচাই করা হয় না।
-     */
-    private fun clickFirstResultSearch(
-        index: Int
-    ) {
-
-        if (!running) return
-
-        val js = """
-            (function() {
-
-                function visible(el) {
-
-                    if (!el) return false;
-
-                    const r =
-                        el.getBoundingClientRect();
-
-                    const s =
-                        getComputedStyle(el);
-
-                    return (
-                        r.width > 0 &&
-                        r.height > 0 &&
-                        s.display !== 'none' &&
-                        s.visibility !== 'hidden'
-                    );
-                }
-
-                function textOf(el) {
-
-                    return (
-                        el.innerText ||
-                        el.textContent ||
-                        el.value ||
-                        el.getAttribute(
-                            'aria-label'
-                        ) ||
-                        ''
-                    )
-                    .trim()
-                    .toLowerCase();
-                }
-
-                const elements =
-                    document.querySelectorAll(
-                        'button, input[type="submit"], input[type="button"], [role="button"]'
-                    );
-
-                const searches = [];
-
-                for (
-                    const el
-                    of elements
-                ) {
-
-                    if (!visible(el))
-                        continue;
-
-                    const text =
-                        textOf(el);
-
-                    if (
-                        text === 'search' ||
-                        text.includes('search')
-                    ) {
-
-                        const disabled =
-                            el.disabled ||
-                            el.getAttribute(
-                                'aria-disabled'
-                            ) === 'true';
-
-                        if (!disabled) {
-                            searches.push(el);
-                        }
-                    }
-                }
-
-                /*
-                 * Exactly user's rule:
-                 * two Search button থাকলে প্রথমটি।
-                 */
-                if (
-                    searches.length < 2
-                ) {
-
-                    return JSON.stringify({
-                        clicked: false,
-                        count:
-                            searches.length
-                    });
-                }
-
-                try {
-
-                    searches[0].scrollIntoView({
-                        block: 'center'
-                    });
-
-                } catch(e) {}
-
-                try {
-                    searches[0].click();
-                } catch(e) {
-
-                    try {
-
-                        searches[0].dispatchEvent(
-                            new MouseEvent(
-                                'click',
-                                {
-                                    bubbles: true,
-                                    cancelable: true,
-                                    view: window
-                                }
-                            )
-                        );
-
-                    } catch(e2) {}
-                }
-
-                return JSON.stringify({
-                    clicked: true,
-                    count:
-                        searches.length
-                });
-
-            })();
-        """.trimIndent()
-
-        eval(js) { result ->
-
-            if (
-                result != null &&
-                result.contains(
-                    "\"clicked\":true"
-                )
-            ) {
-
-                append(
-                    "FIRST Search button clicked."
-                )
-
-                nextRoute(index)
-
-            } else {
-
-                handler.postDelayed({
-
-                    if (running) {
-
-                        processResultPage(
-                            index,
-                            0
-                        )
-                    }
-
-                }, 300)
-            }
-        }
-    }
-
-    /**
-     * পরবর্তী route।
-     */
-    private fun nextRoute(
+    private fun moveToNextFromHome(
         currentIndex: Int
     ) {
 
@@ -2139,14 +2306,16 @@ class MainActivity : Activity() {
             currentIndex + 1
 
         /*
-         * Group 1 শেষ।
+         * প্রথম ৬টি শেষ।
          */
         if (currentIndex == 5) {
 
             append("")
+
             append(
                 "FIRST 6 ROUTES COMPLETED."
             )
+
             append(
                 "WAITING 13 SECONDS..."
             )
@@ -2159,7 +2328,12 @@ class MainActivity : Activity() {
                     "13 SECOND BREAK COMPLETED."
                 )
 
-                runRoute(6)
+                /*
+                 * Route 7 অবশ্যই Home থেকে।
+                 */
+                startRouteFromHome(
+                    6
+                )
 
             }, 13_000)
 
@@ -2167,11 +2341,12 @@ class MainActivity : Activity() {
         }
 
         /*
-         * Group 2 শেষ।
+         * দ্বিতীয় ৬টি শেষ।
          */
         if (currentIndex == 11) {
 
             append("")
+
             append(
                 "ALL 12 ROUTES COMPLETED."
             )
@@ -2182,206 +2357,58 @@ class MainActivity : Activity() {
 
             handler.postDelayed({
 
-                if (!running) return@postDelayed
+                if (!running)
+                    return@postDelayed
 
                 cycle++
 
                 append("")
-                append(
-                    "======================================"
-                )
-                append(
-                    "STARTING CYCLE $cycle"
-                )
+
                 append(
                     "======================================"
                 )
 
-                runRoute(0)
+                append(
+                    "STARTING CYCLE $cycle"
+                )
+
+                append(
+                    "======================================"
+                )
+
+                /*
+                 * নতুন cycle → Home → Route 1.
+                 */
+                startRouteFromHome(
+                    0
+                )
 
             }, 14_000)
 
             return
         }
 
-        if (next in routes.indices) {
-
-            runRoute(next)
-        }
-    }
-
-    /**
-     * Result page-এ অন্তত দুইটি Search button
-     * উপস্থিত/visible/enabled হওয়া পর্যন্ত অপেক্ষা।
-     */
-    private fun waitForTwoSearchButtons(
-        index: Int,
-        attempt: Int
-    ) {
-
-        if (!running) return
-
-        if (attempt > 180) {
-
-            append(
-                "Two Search buttons timeout."
-            )
-
-            append(
-                "Restarting current route..."
-            )
-
-            handler.postDelayed({
-
-                if (running) {
-                    runRoute(index)
-                }
-
-            }, 1000)
-
-            return
-        }
-
-        val url =
-            web.url ?: ""
-
+        /*
+         * সাধারণ next route:
+         *
+         * Ticket পাওয়া গেলে অবশ্যই Home।
+         */
         if (
-            !url.contains(
-                "/booking/train/search"
-            )
+            next in routes.indices
         ) {
 
-            handler.postDelayed({
-
-                waitForTwoSearchButtons(
-                    index,
-                    attempt + 1
-                )
-
-            }, 200)
-
-            return
-        }
-
-        val js = """
-            (function() {
-
-                function visible(el) {
-
-                    if (!el) return false;
-
-                    const r =
-                        el.getBoundingClientRect();
-
-                    const s =
-                        getComputedStyle(el);
-
-                    return (
-                        r.width > 0 &&
-                        r.height > 0 &&
-                        s.display !== 'none' &&
-                        s.visibility !== 'hidden'
-                    );
-                }
-
-                function textOf(el) {
-
-                    return (
-                        el.innerText ||
-                        el.textContent ||
-                        el.value ||
-                        el.getAttribute(
-                            'aria-label'
-                        ) ||
-                        ''
-                    )
-                    .trim()
-                    .toLowerCase();
-                }
-
-                const elements =
-                    document.querySelectorAll(
-                        'button, input[type="submit"], input[type="button"], [role="button"]'
-                    );
-
-                let count = 0;
-
-                for (
-                    const el
-                    of elements
-                ) {
-
-                    if (!visible(el))
-                        continue;
-
-                    const text =
-                        textOf(el);
-
-                    if (
-                        text === 'search' ||
-                        text.includes('search')
-                    ) {
-
-                        const disabled =
-                            el.disabled ||
-                            el.getAttribute(
-                                'aria-disabled'
-                            ) === 'true';
-
-                        if (!disabled) {
-                            count++;
-                        }
-                    }
-                }
-
-                return String(count);
-
-            })();
-        """.trimIndent()
-
-        eval(js) { result ->
-
-            val count =
-                result
-                    ?.toString()
-                    ?.toIntOrNull()
-                    ?: 0
-
-            if (count >= 2) {
-
-                append(
-                    "Two Search buttons detected."
-                )
-
-                /*
-                 * Before clicking next route,
-                 * result page-এর ticket status check।
-                 */
-                processResultPage(
-                    index,
-                    0
-                )
-
-            } else {
-
-                handler.postDelayed({
-
-                    if (running) {
-
-                        waitForTwoSearchButtons(
-                            index,
-                            attempt + 1
-                        )
-                    }
-
-                }, 250)
-            }
+            startRouteFromHome(
+                next
+            )
         }
     }
 
-    /**
-     * WebView JavaScript executor.
+    /*
+     * =========================================================
+     * JAVASCRIPT EVALUATOR
+     * =========================================================
      */
+
     private fun eval(
         javascript: String,
         callback: (String?) -> Unit
@@ -2389,43 +2416,67 @@ class MainActivity : Activity() {
 
         web.evaluateJavascript(
             javascript
-        ) { result ->
+        ) { raw ->
 
-            callback(
+            if (
+                raw == null ||
+                raw == "null"
+            ) {
+
+                callback(null)
+
+                return@evaluateJavascript
+            }
+
+            try {
+
+                /*
+                 * Android evaluateJavascript
+                 * returned JSON string থেকে quotes খুলে।
+                 */
+                var value =
+                    raw
+
                 if (
-                    result == null ||
-                    result == "null"
+                    value.length >= 2 &&
+                    value.first() == '"' &&
+                    value.last() == '"'
                 ) {
-                    null
-                } else {
 
-                    try {
-
-                        JSONObject
-                            .quote(result)
-                            .let {
-                                result
-                                    .removeSurrounding(
-                                        "\""
-                                    )
-                                    .replace(
-                                        "\\\"",
-                                        "\""
-                                    )
-                            }
-
-                    } catch (_: Exception) {
-
-                        result
-                    }
+                    value =
+                        value.substring(
+                            1,
+                            value.length - 1
+                        )
+                        .replace(
+                            "\\\"",
+                            "\""
+                        )
+                        .replace(
+                            "\\\\",
+                            "\\"
+                        )
                 }
-            )
+
+                callback(
+                    value
+                )
+
+            } catch (_: Exception) {
+
+                callback(
+                    raw
+                )
+            }
         }
     }
 
-    /**
-     * DD-MM-YYYY -> YYYY-MM-DD
+    /*
+     * =========================================================
+     * DATE CONVERSION
+     * =========================================================
      */
+
     private fun toIso(
         date: String
     ): String {
@@ -2449,7 +2500,9 @@ class MainActivity : Activity() {
 
             if (parsed != null) {
 
-                output.format(parsed)
+                output.format(
+                    parsed
+                )
 
             } else {
 
@@ -2462,9 +2515,12 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * Log output.
+    /*
+     * =========================================================
+     * LOG
+     * =========================================================
      */
+
     private fun append(
         message: String
     ) {
@@ -2490,9 +2546,12 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * Telegram message.
+    /*
+     * =========================================================
+     * TELEGRAM
+     * =========================================================
      */
+
     private fun sendTelegram(
         message: String
     ) {
@@ -2525,10 +2584,7 @@ class MainActivity : Activity() {
 
                 val urlString =
                     "https://api.telegram.org/bot" +
-                            URLEncoder.encode(
-                                token,
-                                "UTF-8"
-                            ) +
+                            token +
                             "/sendMessage" +
                             "?chat_id=" +
                             URLEncoder.encode(
@@ -2557,7 +2613,7 @@ class MainActivity : Activity() {
                 connection.readTimeout =
                     15000
 
-                val responseCode =
+                val response =
                     connection.responseCode
 
                 connection.disconnect()
@@ -2565,7 +2621,7 @@ class MainActivity : Activity() {
                 runOnUiThread {
 
                     if (
-                        responseCode in 200..299
+                        response in 200..299
                     ) {
 
                         append(
@@ -2575,7 +2631,7 @@ class MainActivity : Activity() {
                     } else {
 
                         append(
-                            "Telegram error: HTTP $responseCode"
+                            "Telegram error: HTTP $response"
                         )
                     }
                 }
@@ -2586,7 +2642,8 @@ class MainActivity : Activity() {
 
                     append(
                         "Telegram error: ${
-                            e.message ?: "Unknown error"
+                            e.message
+                                ?: "Unknown error"
                         }"
                     )
                 }
@@ -2604,8 +2661,15 @@ class MainActivity : Activity() {
 
         executor.shutdownNow()
 
-        web.stopLoading()
-        web.destroy()
+        try {
+            web.stopLoading()
+        } catch (_: Exception) {
+        }
+
+        try {
+            web.destroy()
+        } catch (_: Exception) {
+        }
 
         super.onDestroy()
     }
