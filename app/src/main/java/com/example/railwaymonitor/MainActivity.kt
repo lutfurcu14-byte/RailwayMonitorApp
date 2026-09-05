@@ -30,7 +30,6 @@ class MainActivity : Activity() {
     private var running = false
     private var routeIndex = 0
     private var cycle = 1
-    private var phase = 0
     private var targetDate = ""
 
     private val routes = listOf(
@@ -109,6 +108,10 @@ class MainActivity : Activity() {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.databaseEnabled = true
+        web.settings.javaScriptCanOpenWindowsAutomatically = true
+        web.settings.loadsImagesAutomatically = true
+        web.settings.allowFileAccess = true
+        web.settings.allowContentAccess = true
 
         web.settings.userAgentString =
             web.settings.userAgentString + " RailwayMonitorApp/1.0"
@@ -209,7 +212,6 @@ class MainActivity : Activity() {
         running = true
         routeIndex = 0
         cycle = 1
-        phase = 0
 
         append("=== MONITOR STARTED ===")
         append(
@@ -252,202 +254,500 @@ class MainActivity : Activity() {
             "https://eticket.railway.gov.bd/"
         )
 
+        /*
+         * Railway Angular application needs time to initialise.
+         * We deliberately wait before touching the form.
+         */
         handler.postDelayed(
             {
-                fillAndSearch(from, to)
+                prepareRoute(from, to, 0)
             },
-            2200
+            3000
         )
     }
 
-    private fun fillAndSearch(
+    /*
+     * Repeatedly tries to fill the form.
+     * This prevents the monitor from moving ahead while
+     * Railway's Angular UI is still loading.
+     */
+    private fun prepareRoute(
         from: String,
-        to: String
+        to: String,
+        attempt: Int
     ) {
 
         if (!running) return
 
+        if (attempt >= 30) {
+
+            append(
+                "Form preparation timeout for $from → $to"
+            )
+
+            nextRoute()
+            return
+        }
+
         val js = """
         (function(){
-          const from=${JSONObject.quote(from)}, to=${JSONObject.quote(to)};
-          const date=${JSONObject.quote(toIso(targetDate))};
 
-          function vis(sel){
-            return [...document.querySelectorAll(sel)]
-              .find(e =>
+          function visible(e){
+            return e &&
+              (
                 e.offsetWidth ||
                 e.offsetHeight ||
                 e.getClientRects().length
-              )
+              );
           }
 
-          function fire(e){
-            ['input','change','blur'].forEach(t =>
+          function nativeValue(e, value){
+
+            if(!e) return false;
+
+            const setter =
+              Object.getOwnPropertyDescriptor(
+                HTMLInputElement.prototype,
+                'value'
+              )?.set;
+
+            if(setter){
+              setter.call(e, value);
+            }else{
+              e.value = value;
+            }
+
+            ['input','change','blur'].forEach(function(t){
               e.dispatchEvent(
                 new Event(t,{bubbles:true})
-              )
-            );
+              );
+            });
+
+            return true;
           }
 
-          function city(name, ctrl){
-            const e =
-              vis('input[formcontrolname="'+ctrl+'"]');
+          function findInput(control){
+
+            const list = [
+              'input[formcontrolname="'+control+'"]',
+              'input[name="'+control+'"]',
+              'input[id="'+control+'"]'
+            ];
+
+            for(const s of list){
+
+              const all =
+                [...document.querySelectorAll(s)];
+
+              const e =
+                all.find(visible);
+
+              if(e) return e;
+            }
+
+            return null;
+          }
+
+          function setCity(name, control){
+
+            const e = findInput(control);
 
             if(!e) return false;
 
             e.focus();
 
-            const s =
-              Object.getOwnPropertyDescriptor(
-                HTMLInputElement.prototype,
-                'value'
-              ).set;
-
-            s.call(e,name);
-
-            fire(e);
+            nativeValue(e,name);
 
             return true;
           }
 
-          function dateSet(){
+          function clickAgree(){
 
-            const v =
-              vis('input.datepicker.hasDatepicker') ||
-              vis('input#doj');
+            [...document.querySelectorAll(
+              'button,[role="button"],a'
+            )].forEach(function(e){
 
-            if(v){
+              const t =
+                (e.innerText ||
+                 e.textContent ||
+                 '').trim().toUpperCase();
 
-              const s =
-                Object.getOwnPropertyDescriptor(
-                  HTMLInputElement.prototype,
-                  'value'
-                ).set;
+              if(t === 'I AGREE'){
+                e.click();
+              }
 
-              s.call(v,date);
+            });
+          }
 
-              fire(v);
+          function setDate(){
+
+            const iso =
+              ${JSONObject.quote(toIso(targetDate))};
+
+            const inputs =
+              [...document.querySelectorAll('input')]
+              .filter(visible);
+
+            for(const e of inputs){
+
+              const id =
+                (e.id || '').toLowerCase();
+
+              const name =
+                (e.getAttribute('name') || '')
+                .toLowerCase();
+
+              const fc =
+                (e.getAttribute('formcontrolname') || '')
+                .toLowerCase();
+
+              if(
+                id === 'doj' ||
+                name === 'doj' ||
+                fc === 'doj' ||
+                e.classList.contains('hasDatepicker')
+              ){
+
+                nativeValue(e,iso);
+              }
             }
 
-            const h =
+            const hidden =
               document.querySelector(
                 'input[type="hidden"][formcontrolname="doj"]'
               );
 
-            if(h){
-
-              const s =
-                Object.getOwnPropertyDescriptor(
-                  HTMLInputElement.prototype,
-                  'value'
-                ).set;
-
-              s.call(h,date);
-
-              fire(h);
+            if(hidden){
+              nativeValue(hidden,iso);
             }
-
-            return true;
           }
 
-          [
-            ...document.querySelectorAll(
-              'button,[role="button"],select,option'
-            )
-          ].forEach(e => {
+          function chooseClass(){
 
-            if(
-              (e.innerText ||
-               e.textContent ||
-               '').trim() === 'I AGREE'
-            ){
-              e.click();
-            }
+            let found = false;
 
-          });
+            /*
+             * First try normal SELECT controls.
+             */
+            [...document.querySelectorAll('select')]
+            .forEach(function(select){
 
-          city(from,'fromcity');
-          city(to,'tocity');
-          dateSet();
+              [...select.options]
+              .forEach(function(option){
 
-          const sels =
-            [...document.querySelectorAll('select')];
+                const text =
+                  (option.textContent || '')
+                  .trim()
+                  .toUpperCase();
 
-          sels.forEach(s =>
-            [...s.options].forEach(o => {
+                const value =
+                  (option.value || '')
+                  .trim()
+                  .toUpperCase();
+
+                if(
+                  text === 'S_CHAIR' ||
+                  text === 'S CHAIR' ||
+                  value === 'S_CHAIR'
+                ){
+
+                  option.selected = true;
+
+                  select.dispatchEvent(
+                    new Event('change',{bubbles:true})
+                  );
+
+                  select.dispatchEvent(
+                    new Event('input',{bubbles:true})
+                  );
+
+                  found = true;
+                }
+
+              });
+
+            });
+
+            /*
+             * Then try clickable UI elements.
+             */
+            const elements =
+              [...document.querySelectorAll(
+                'button,[role="button"],label,div,span'
+              )];
+
+            for(const e of elements){
+
+              if(!visible(e)) continue;
+
+              const text =
+                (e.innerText ||
+                 e.textContent ||
+                 '').trim().toUpperCase();
 
               if(
-                o.value === 'S_CHAIR' ||
-                o.textContent.trim() === 'S_CHAIR'
+                text === 'S_CHAIR' ||
+                text === 'S CHAIR'
               ){
-                o.selected = true;
-                fire(s);
+
+                e.click();
+
+                found = true;
               }
+            }
 
-            })
-          );
+            /*
+             * Try radio / checkbox labels containing S_CHAIR.
+             */
+            [...document.querySelectorAll(
+              'input[type="radio"],input[type="checkbox"]'
+            )].forEach(function(input){
 
-          const txt =
-            [...document.querySelectorAll('*')]
-            .find(e =>
-              e.childElementCount === 0 &&
-              (e.textContent || '').trim() === 'S_CHAIR' &&
-              (e.offsetWidth || e.offsetHeight)
+              const parent =
+                input.parentElement;
+
+              const text =
+                (
+                  input.value + ' ' +
+                  (parent?.innerText || '')
+                )
+                .trim()
+                .toUpperCase();
+
+              if(
+                text.includes('S_CHAIR') ||
+                text.includes('S CHAIR')
+              ){
+
+                input.click();
+
+                found = true;
+              }
+            });
+
+            return found;
+          }
+
+          clickAgree();
+
+          const fromOK =
+            setCity(
+              ${JSONObject.quote(from)},
+              'fromcity'
             );
 
-          if(txt) txt.click();
+          const toOK =
+            setCity(
+              ${JSONObject.quote(to)},
+              'tocity'
+            );
 
-          return [...document.querySelectorAll('button')]
-            .find(b =>
-              (b.innerText || '').trim() === 'Search' &&
-              !b.disabled
-            )
-            ? 'READY'
-            : 'WAIT';
+          setDate();
+
+          const classOK =
+            chooseClass();
+
+          return JSON.stringify({
+            fromOK:fromOK,
+            toOK:toOK,
+            classOK:classOK,
+            url:location.href
+          });
 
         })()
         """.trimIndent()
 
-        eval(js) {
+        eval(js) { raw ->
+
+            append(
+                "Form attempt ${attempt + 1}: $raw"
+            )
 
             handler.postDelayed(
                 {
-                    clickFirstSearch()
+
+                    if (!running) return@postDelayed
+
+                    if(attempt >= 2){
+
+                        waitForSearchButton(
+                            from,
+                            to,
+                            0
+                        )
+
+                    }else{
+
+                        prepareRoute(
+                            from,
+                            to,
+                            attempt + 1
+                        )
+                    }
+
                 },
-                800
+                700
             )
         }
     }
 
-    private fun clickFirstSearch() {
+    /*
+     * Search is no longer clicked just once.
+     * We keep looking until Angular enables it.
+     */
+    private fun waitForSearchButton(
+        from: String,
+        to: String,
+        attempt: Int
+    ) {
 
         if (!running) return
 
-        eval(
-            """
-            (function(){
-              const b =
-                [...document.querySelectorAll('button')]
-                .find(x =>
-                  (x.innerText || '').trim() === 'Search' &&
-                  !x.disabled
-                );
-
-              if(b){
-                b.click();
-                return 'CLICKED';
-              }
-
-              return 'NO';
-            })()
-            """.trimIndent()
-        ) {
+        if(attempt >= 40){
 
             append(
-                "Search clicked; waiting for Railway result..."
+                "Search button timeout for $from → $to"
             )
 
-            waitResult(0)
+            nextRoute()
+            return
+        }
+
+        val js = """
+        (function(){
+
+          function visible(e){
+            return e &&
+              (
+                e.offsetWidth ||
+                e.offsetHeight ||
+                e.getClientRects().length
+              );
+          }
+
+          function text(e){
+            return (
+              e.innerText ||
+              e.textContent ||
+              e.getAttribute('aria-label') ||
+              ''
+            )
+            .trim()
+            .replace(/\s+/g,' ')
+            .toUpperCase();
+          }
+
+          const all =
+            [
+              ...document.querySelectorAll(
+                'button,input[type="button"],input[type="submit"],[role="button"]'
+              )
+            ];
+
+          const candidates =
+            all.filter(function(e){
+
+              if(!visible(e)) return false;
+
+              const t = text(e);
+
+              return (
+                t === 'SEARCH' ||
+                t === 'SEARCH TRAIN' ||
+                t.includes('SEARCH')
+              );
+
+            });
+
+          const enabled =
+            candidates.find(function(e){
+
+              return !e.disabled &&
+                e.getAttribute('aria-disabled') !== 'true' &&
+                !e.classList.contains('disabled');
+
+            });
+
+          if(enabled){
+
+            enabled.scrollIntoView({
+              block:'center',
+              inline:'center'
+            });
+
+            /*
+             * Use native click first.
+             */
+            enabled.click();
+
+            /*
+             * Also dispatch mouse events for Angular/UI handlers.
+             */
+            ['mousedown','mouseup','click'].forEach(
+              function(type){
+
+                enabled.dispatchEvent(
+                  new MouseEvent(
+                    type,
+                    {
+                      bubbles:true,
+                      cancelable:true,
+                      view:window
+                    }
+                  )
+                );
+
+              }
+            );
+
+            return JSON.stringify({
+              result:'CLICKED',
+              text:text(enabled)
+            });
+          }
+
+          return JSON.stringify({
+            result:'WAIT',
+            candidates:candidates.length
+          });
+
+        })()
+        """.trimIndent()
+
+        eval(js) { raw ->
+
+            append(
+                "Search attempt ${attempt + 1}: $raw"
+            )
+
+            if(
+                raw.contains("\"CLICKED\"")
+            ){
+
+                append(
+                    "Search clicked; waiting for Railway result..."
+                )
+
+                handler.postDelayed(
+                    {
+                        waitResult(0)
+                    },
+                    1000
+                )
+
+            }else{
+
+                handler.postDelayed(
+                    {
+                        waitForSearchButton(
+                            from,
+                            to,
+                            attempt + 1
+                        )
+                    },
+                    500
+                )
+            }
         }
     }
 
@@ -516,6 +816,7 @@ class MainActivity : Activity() {
               'NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE'
             )
           ){
+
             return JSON.stringify({
               type:'NO_TICKET'
             });
@@ -602,12 +903,13 @@ class MainActivity : Activity() {
 
             try {
 
+                val clean =
+                    raw
+                        .trim('"')
+                        .replace("\\\"", "\"")
+
                 val o =
-                    JSONObject(
-                        raw
-                            .trim('"')
-                            .replace("\\\"", "\"")
-                    )
+                    JSONObject(clean)
 
                 val type =
                     o.optString("type")
@@ -799,17 +1101,60 @@ class MainActivity : Activity() {
         (function(){
 
           const bs =
-            [...document.querySelectorAll('button')]
-            .filter(b =>
-              (b.innerText || '').trim() === 'Search' &&
-              !b.disabled
-            );
+            [
+              ...document.querySelectorAll(
+                'button,input[type="button"],input[type="submit"],[role="button"]'
+              )
+            ]
+            .filter(function(b){
+
+              const t =
+                (
+                  b.innerText ||
+                  b.textContent ||
+                  b.value ||
+                  ''
+                )
+                .trim()
+                .replace(/\s+/g,' ')
+                .toUpperCase();
+
+              return (
+                t === 'SEARCH' ||
+                t.includes('SEARCH')
+              ) &&
+              !b.disabled &&
+              b.getAttribute('aria-disabled') !== 'true';
+            });
 
           if(
             bs.length >= $buttonNumber
           ){
 
-            bs[$buttonNumber-1].click();
+            const b =
+              bs[$buttonNumber-1];
+
+            b.scrollIntoView({
+              block:'center'
+            });
+
+            b.click();
+
+            ['mousedown','mouseup','click']
+              .forEach(function(type){
+
+                b.dispatchEvent(
+                  new MouseEvent(
+                    type,
+                    {
+                      bubbles:true,
+                      cancelable:true,
+                      view:window
+                    }
+                  )
+                );
+
+              });
 
             return 'CLICKED';
           }
