@@ -85,11 +85,7 @@ class MainActivity : Activity() {
         web.settings.domStorageEnabled = true
         web.settings.databaseEnabled = true
         web.settings.userAgentString = web.settings.userAgentString + " RailwayMonitorApp/1.0"
-        web.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                // Page loaded
-            }
-        }
+        web.webViewClient = object : WebViewClient() {}
         web.webChromeClient = WebChromeClient()
         web.loadUrl("https://eticket.railway.gov.bd/")
     }
@@ -136,7 +132,7 @@ class MainActivity : Activity() {
         append("Date: $targetDate | Class: S_CHAIR")
         setStatus("Running - Dhaka Routes")
 
-        runCurrentRoute()
+        runCurrentRoute(true) // Start the very first route from Home Page
     }
 
     private fun stopMonitor() {
@@ -150,7 +146,7 @@ class MainActivity : Activity() {
         return if (currentGroup == 1) dhakaRoutes else bimanRoutes
     }
 
-    private fun runCurrentRoute() {
+    private fun runCurrentRoute(fromHome: Boolean) {
         if (!running) return
         val routes = getCurrentRoutes()
         if (routeIndex !in routes.indices) return
@@ -160,11 +156,13 @@ class MainActivity : Activity() {
         append("[Group $groupName - Route ${routeIndex + 1}/6] $from → $to")
         setStatus("Searching [$groupName] ${routeIndex + 1}/6: $from → $to")
 
-        web.loadUrl("https://eticket.railway.gov.bd/")
-        handler.postDelayed({
-            if (!running) return@postDelayed
-            fillAndSearch(from, to)
-        }, 2200)
+        if (fromHome) {
+            web.loadUrl("https://eticket.railway.gov.bd/")
+            handler.postDelayed({
+                if (!running) return@postDelayed
+                fillAndSearch(from, to)
+            }, 2500)
+        }
     }
 
     private fun fillAndSearch(from: String, to: String) {
@@ -232,7 +230,6 @@ class MainActivity : Activity() {
         """.trimIndent()
 
         eval(js) { result ->
-            val clean = result.trim('"').replace("\\\"", "\"")
             handler.postDelayed({
                 if (!running) return@postDelayed
                 selectDateFromCalendar(from, to, 0)
@@ -276,24 +273,7 @@ class MainActivity : Activity() {
                     if( monthSelect && yearSelect ){
                         currentMonth = parseInt( monthSelect.value, 10 );
                         currentYear = parseInt( yearSelect.value, 10 );
-                    } else {
-                        const title = ui.querySelector( '.ui-datepicker-title' );
-                        if(title){
-                            const text = title.innerText || '';
-                            const ym = text.match( /\d{4}/ );
-                            if(ym){
-                                currentYear = parseInt( ym[0], 10 );
-                                const months = [ 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December' ];
-                                for( let i = 0; i < months.length; i++ ){
-                                    if( text.toLowerCase().includes( months[i].toLowerCase() ) ){
-                                        currentMonth = i;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
                     }
-
                     if( currentMonth >= 0 && currentYear >= 0 ){
                         const currentIndex = currentYear * 12 + currentMonth;
                         const targetIndex = wantedYear * 12 + wantedMonth;
@@ -317,11 +297,7 @@ class MainActivity : Activity() {
                     const text = ( el.innerText || el.textContent || '' ).trim();
                     const aria = ( el.getAttribute( 'aria-label' ) || '' ).trim();
                     const dataDate = ( el.getAttribute( 'data-date' ) || '' ).trim();
-                    if( aria.includes(target) || dataDate === target ){
-                        el.click();
-                        return 'DATE_CLICKED';
-                    }
-                    if( text === String(wantedDay) ){
+                    if( aria.includes(target) || dataDate === target || text === String(wantedDay) ){
                         el.click();
                         return 'DATE_CLICKED';
                     }
@@ -338,14 +314,10 @@ class MainActivity : Activity() {
                     waitForSearchEnabled(from, to, 0)
                 }
                 "CALENDAR_MOVED" -> {
-                    handler.postDelayed({
-                        if (running) selectDateFromCalendar(from, to, attempt + 1)
-                    }, 400)
+                    handler.postDelayed({ if (running) selectDateFromCalendar(from, to, attempt + 1) }, 400)
                 }
                 else -> {
-                    handler.postDelayed({
-                        if (running) reopenDateCalendar(from, to)
-                    }, 700)
+                    handler.postDelayed({ if (running) reopenDateCalendar(from, to) }, 700)
                 }
             }
         }
@@ -369,9 +341,7 @@ class MainActivity : Activity() {
             })()
         """.trimIndent()
         eval(js) {
-            handler.postDelayed({
-                if (running) selectDateFromCalendar(from, to, 0)
-            }, 500)
+            handler.postDelayed({ if (running) selectDateFromCalendar(from, to, 0) }, 500)
         }
     }
 
@@ -380,7 +350,11 @@ class MainActivity : Activity() {
         val js = """
             (function(){
                 function visible(e){ return !!( e && ( e.offsetWidth || e.offsetHeight || e.getClientRects().length ) ); }
-                const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => visible(b) && ( b.innerText || '' ).trim() === 'Search' );
+                const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => {
+                    const txt = (b.innerText || '').toUpperCase().trim();
+                    return (txt === 'SEARCH TRAINS' || txt === 'SEARCH') && visible(b);
+                });
+                
                 if( buttons.length > 0 ){
                     const enabled = buttons.find( b => !b.disabled );
                     if( enabled ) return 'READY';
@@ -392,20 +366,16 @@ class MainActivity : Activity() {
         eval(js) { result ->
             val clean = result.trim('"').replace("\\\"", "\"")
             if (clean == "READY") {
-                append("✓ Search button is enabled.")
+                append("✓ Search Trains button is ready.")
                 handler.postDelayed({ if (running) clickFirstSearch() }, 500)
             } else {
                 if (attempt > 40) {
-                    append("Force clicking search button...")
+                    append("Force clicking Search Trains button...")
                     forceClickSearch()
                     return@eval
                 }
-                if (attempt % 5 == 0) {
-                    append("Waiting for Search button to enable...")
-                }
-                handler.postDelayed({
-                    if (running) { waitForSearchEnabled(from, to, attempt + 1) }
-                }, 500)
+                if (attempt % 5 == 0) append("Waiting for Search Trains button to enable...")
+                handler.postDelayed({ if (running) waitForSearchEnabled(from, to, attempt + 1) }, 500)
             }
         }
     }
@@ -414,7 +384,10 @@ class MainActivity : Activity() {
         if (!running) return
         val js = """
             (function(){
-                const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => ( b.innerText || '' ).trim() === 'Search' );
+                const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => {
+                    const txt = (b.innerText || '').toUpperCase().trim();
+                    return txt === 'SEARCH TRAINS' || txt === 'SEARCH';
+                });
                 const b = buttons.find( x => !x.disabled ) || buttons[0];
                 if( b ){
                     b.click();
@@ -440,7 +413,10 @@ class MainActivity : Activity() {
         val js = """
             (function(){
                 const buttons = [ ...document.querySelectorAll( 'button' ) ];
-                const b = buttons.find( x => (x.innerText || '').trim() === 'Search' );
+                const b = buttons.find( x => {
+                    const txt = (x.innerText || '').toUpperCase().trim();
+                    return txt === 'SEARCH TRAINS' || txt === 'SEARCH';
+                });
                 if(b){
                     b.removeAttribute('disabled');
                     b.click();
@@ -453,13 +429,11 @@ class MainActivity : Activity() {
         eval(js) { result ->
             val clean = result.trim('"')
             if (clean == "FORCE_CLICKED") {
-                append("✓ Force clicked Search button.")
+                append("✓ Force clicked Search Trains button.")
                 waitResult(0)
             } else {
-                append("Search button not found, retrying route...")
-                handler.postDelayed({
-                    if (running) runCurrentRoute()
-                }, 1000)
+                append("Search Trains button not found, retrying route from home...")
+                handler.postDelayed({ if (running) runCurrentRoute(true) }, 1000)
             }
         }
     }
@@ -470,16 +444,12 @@ class MainActivity : Activity() {
             val url = raw.trim('"')
             if (url.contains("/booking/train/search")) {
                 append("✓ Result page detected. Checking availability...")
-                handler.postDelayed({
-                    if (running) checkResult(0)
-                }, 2000)
+                handler.postDelayed({ if (running) checkResult(0) }, 2000)
             } else if (elapsed >= 90000) {
                 append("Result timeout. Moving to next route.")
-                moveToNextRouteOrGroup()
+                moveToNextRouteOrGroup(false)
             } else {
-                handler.postDelayed({
-                    if (running) waitResult(elapsed + 1000)
-                }, 1000)
+                handler.postDelayed({ if (running) waitResult(elapsed + 1000) }, 1000)
             }
         }
     }
@@ -546,26 +516,22 @@ class MainActivity : Activity() {
                     "NO_TICKET" -> {
                         val (from, to) = getCurrentRoutes()[routeIndex]
                         append("✗ No ticket for $from → $to")
-                        moveToNextRouteOrGroup()
+                        moveToNextRouteOrGroup(false) // No ticket - will click result page alternate route
                     }
                     "AVAILABLE" -> {
                         val arr = o.getJSONArray("items")
-                        handleAvailable(arr)
+                        handleAvailable(arr) // Ticket available - will start next from home
                     }
                     else -> {
                         if (elapsed >= 30000) {
-                            moveToNextRouteOrGroup()
+                            moveToNextRouteOrGroup(false)
                         } else {
-                            handler.postDelayed({
-                                if (running) checkResult(elapsed + 1000)
-                            }, 1000)
+                            handler.postDelayed({ if (running) checkResult(elapsed + 1000) }, 1000)
                         }
                     }
                 }
             } catch (e: Exception) {
-                handler.postDelayed({
-                    if (running) checkResult(elapsed + 1000)
-                }, 1000)
+                handler.postDelayed({ if (running) checkResult(elapsed + 1000) }, 1000)
             }
         }
     }
@@ -588,7 +554,7 @@ class MainActivity : Activity() {
         }
 
         if (positiveCount == 0) {
-            moveToNextRouteOrGroup()
+            moveToNextRouteOrGroup(false)
             return
         }
 
@@ -596,18 +562,31 @@ class MainActivity : Activity() {
         append(message)
         sendTelegram(message) {
             if (!running) return@sendTelegram
-            moveToNextRouteOrGroup()
+            // Ticket found! Proceed to next route from Home Page.
+            moveToNextRouteOrGroup(true) 
         }
     }
 
-    private fun moveToNextRouteOrGroup() {
+    private fun moveToNextRouteOrGroup(ticketFound: Boolean) {
         if (!running) return
         routeIndex++
         val routes = getCurrentRoutes()
 
         if (routeIndex < routes.size) {
-            runCurrentRoute()
+            if (ticketFound) {
+                // Since ticket was found, start the NEXT route from the Home page
+                append("Starting next route from Home Page...")
+                runCurrentRoute(true)
+            } else {
+                // No ticket was found. Click the alternate route DIRECTLY on the result page
+                val nextFrom = routes[routeIndex].first
+                val nextTo = routes[routeIndex].second
+                append("Clicking alternate route directly on result page...")
+                setStatus("Clicking Alternate: $nextFrom → $nextTo")
+                clickAlternateRoute(nextFrom, nextTo, 0)
+            }
         } else {
+            // Group is complete
             if (currentGroup == 1) {
                 append("=== GROUP 1 (Dhaka Routes) COMPLETED ===")
                 append("Waiting 13 seconds before starting Group 2 (Biman_Bandar)...")
@@ -617,7 +596,7 @@ class MainActivity : Activity() {
                     currentGroup = 2
                     routeIndex = 0
                     append("=== STARTING GROUP 2 (Biman_Bandar) ===")
-                    runCurrentRoute()
+                    runCurrentRoute(true) // Start new group from home
                 }, 13000L)
             } else {
                 append("=== GROUP 2 (Biman_Bandar) COMPLETED ===")
@@ -628,8 +607,52 @@ class MainActivity : Activity() {
                     currentGroup = 1
                     routeIndex = 0
                     append("=== RESTARTING FULL CYCLE FROM ROUTE 1 ===")
-                    runCurrentRoute()
+                    runCurrentRoute(true) // Start new cycle from home
                 }, 14000L)
+            }
+        }
+    }
+
+    private fun clickAlternateRoute(from: String, to: String, attempt: Int) {
+        if (!running) return
+        val js = """
+            (function(){
+                const targetText = '${from.uppercase()} - ${to.uppercase()}';
+                const buttons = [ ...document.querySelectorAll( 'button, a' ) ];
+                
+                const b = buttons.find( x => {
+                    const txt = (x.innerText || '').toUpperCase().replace(/\s+/g, ' ');
+                    return txt.includes(targetText);
+                });
+                
+                if( b ){
+                    // Clear the old text to avoid reading the old result before DOM updates
+                    document.querySelectorAll('*').forEach(e => {
+                        if(e.innerText && e.innerText.includes('NOT FINDING ANY TICKET')){
+                            e.innerText = 'LOADING NEW ROUTE...';
+                        }
+                    });
+                    
+                    b.click();
+                    return 'CLICKED';
+                }
+                return 'NOT_FOUND';
+            })()
+        """.trimIndent()
+
+        eval(js) { result ->
+            val clean = result.trim('"')
+            if (clean == "CLICKED") {
+                append("✓ Alternate route clicked ($from -> $to). Waiting for new result...")
+                // Wait 2.5 seconds for the DOM to update, then check result
+                handler.postDelayed({ if (running) checkResult(0) }, 2500)
+            } else {
+                if (attempt > 10) {
+                    append("Alternate route button not found. Falling back to Home page...")
+                    runCurrentRoute(true)
+                } else {
+                    handler.postDelayed({ if (running) clickAlternateRoute(from, to, attempt + 1) }, 500)
+                }
             }
         }
     }
