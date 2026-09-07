@@ -13,7 +13,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
 
@@ -381,19 +380,11 @@ class MainActivity : Activity() {
         val js = """
             (function(){
                 function visible(e){ return !!( e && ( e.offsetWidth || e.offsetHeight || e.getClientRects().length ) ); }
-                const inputs = [ ...document.querySelectorAll( 'input' ) ].filter( e => visible(e) );
-                const dateField = inputs.find(e => {
-                    const p = ( e.getAttribute( 'placeholder' ) || '' ).trim().toLowerCase();
-                    const v = ( e.value || '' ).trim().toLowerCase();
-                    return ( p === 'pick a date' || v === 'pick a date' );
-                }) || inputs.find( e => e.matches( 'input[formcontrolname="doj"]' ) ) || document.querySelector( 'input#doj' );
-                if(!dateField) return 'WAIT_DATE_FIELD';
-                const dateValue = ( dateField.value || '' ).trim();
-                if( !dateValue || dateValue.toLowerCase() === 'pick a date' ) return 'WAIT_DATE';
-
                 const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => visible(b) && ( b.innerText || '' ).trim() === 'Search' );
-                const enabled = buttons.find( b => !b.disabled );
-                if(enabled) return 'READY';
+                if( buttons.length > 0 ){
+                    const enabled = buttons.find( b => !b.disabled );
+                    if( enabled ) return 'READY';
+                }
                 return 'WAIT_SEARCH';
             })()
         """.trimIndent()
@@ -401,11 +392,19 @@ class MainActivity : Activity() {
         eval(js) { result ->
             val clean = result.trim('"').replace("\\\"", "\"")
             if (clean == "READY") {
-                append("✓ Search enabled.")
-                handler.postDelayed({ if (running) clickFirstSearch() }, 300)
+                append("✓ Search button is enabled.")
+                handler.postDelayed({ if (running) clickFirstSearch() }, 500)
             } else {
+                if (attempt > 40) {
+                    append("Force clicking search button...")
+                    forceClickSearch()
+                    return@eval
+                }
+                if (attempt % 5 == 0) {
+                    append("Waiting for Search button to enable...")
+                }
                 handler.postDelayed({
-                    if (running) waitForSearchEnabled(from, to, attempt + 1)
+                    if (running) { waitForSearchEnabled(from, to, attempt + 1) }
                 }, 500)
             }
         }
@@ -416,24 +415,51 @@ class MainActivity : Activity() {
         val js = """
             (function(){
                 const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => ( b.innerText || '' ).trim() === 'Search' );
-                const b = buttons.find( x => !x.disabled );
-                if( b && !b.disabled ){
+                const b = buttons.find( x => !x.disabled ) || buttons[0];
+                if( b ){
                     b.click();
                     return 'CLICKED';
                 }
-                return 'NOT_ENABLED';
+                return 'NOT_FOUND';
             })()
         """.trimIndent()
 
         eval(js) { result ->
             val clean = result.trim('"')
             if (clean == "CLICKED") {
-                append("✓ Search button clicked.")
+                append("✓ Main Search clicked.")
                 waitResult(0)
             } else {
+                forceClickSearch()
+            }
+        }
+    }
+
+    private fun forceClickSearch() {
+        if (!running) return
+        val js = """
+            (function(){
+                const buttons = [ ...document.querySelectorAll( 'button' ) ];
+                const b = buttons.find( x => (x.innerText || '').trim() === 'Search' );
+                if(b){
+                    b.removeAttribute('disabled');
+                    b.click();
+                    return 'FORCE_CLICKED';
+                }
+                return 'FAIL';
+            })()
+        """.trimIndent()
+
+        eval(js) { result ->
+            val clean = result.trim('"')
+            if (clean == "FORCE_CLICKED") {
+                append("✓ Force clicked Search button.")
+                waitResult(0)
+            } else {
+                append("Search button not found, retrying route...")
                 handler.postDelayed({
-                    if (running) waitForSearchEnabled(getCurrentRoutes()[routeIndex].first, getCurrentRoutes()[routeIndex].second, 0)
-                }, 700)
+                    if (running) runCurrentRoute()
+                }, 1000)
             }
         }
     }
@@ -465,7 +491,6 @@ class MainActivity : Activity() {
                 function normalize(s){ return ( s || '' ).replace( /\s+/g, ' ' ).trim(); }
                 const body = normalize( document.body?.innerText || '' ).toUpperCase();
 
-                // Check for Available Tickets label
                 const labels = [ ...document.querySelectorAll( '*' ) ].filter( e => normalize( e.innerText || '' ) === 'Available Tickets(Counter + Online)' );
                 const results = [];
 
@@ -505,7 +530,6 @@ class MainActivity : Activity() {
                     return JSON.stringify({ type: 'AVAILABLE', items: results });
                 }
 
-                // If "NOT FINDING ANY TICKET" exists
                 if( body.includes( 'NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE' ) ){
                     return JSON.stringify({ type: 'NO_TICKET' });
                 }
@@ -530,7 +554,6 @@ class MainActivity : Activity() {
                     }
                     else -> {
                         if (elapsed >= 30000) {
-                            // Timeout waiting for specific labels, treat as no ticket or retry
                             moveToNextRouteOrGroup()
                         } else {
                             handler.postDelayed({
@@ -583,10 +606,8 @@ class MainActivity : Activity() {
         val routes = getCurrentRoutes()
 
         if (routeIndex < routes.size) {
-            // Move to next route in the same group (triggers alternative search block click or fresh search)
             runCurrentRoute()
         } else {
-            // Group finished (all 6 routes checked)
             if (currentGroup == 1) {
                 append("=== GROUP 1 (Dhaka Routes) COMPLETED ===")
                 append("Waiting 13 seconds before starting Group 2 (Biman_Bandar)...")
