@@ -132,7 +132,7 @@ class MainActivity : Activity() {
         append("Date: $targetDate | Class: S_CHAIR")
         setStatus("Running - Dhaka Routes")
 
-        runCurrentRoute(true) // Start the very first route from Home Page
+        runCurrentRoute(true)
     }
 
     private fun stopMonitor() {
@@ -229,7 +229,7 @@ class MainActivity : Activity() {
             })()
         """.trimIndent()
 
-        eval(js) { result ->
+        eval(js) { _ ->
             handler.postDelayed({
                 if (!running) return@postDelayed
                 selectDateFromCalendar(from, to, 0)
@@ -352,7 +352,7 @@ class MainActivity : Activity() {
                 function visible(e){ return !!( e && ( e.offsetWidth || e.offsetHeight || e.getClientRects().length ) ); }
                 const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => {
                     const txt = (b.innerText || '').toUpperCase().trim();
-                    return (txt === 'SEARCH TRAINS' || txt === 'SEARCH') && visible(b);
+                    return (txt.includes('SEARCH TRAINS') || txt === 'SEARCH') && visible(b);
                 });
                 
                 if( buttons.length > 0 ){
@@ -386,7 +386,7 @@ class MainActivity : Activity() {
             (function(){
                 const buttons = [ ...document.querySelectorAll( 'button' ) ].filter( b => {
                     const txt = (b.innerText || '').toUpperCase().trim();
-                    return txt === 'SEARCH TRAINS' || txt === 'SEARCH';
+                    return txt.includes('SEARCH TRAINS') || txt === 'SEARCH';
                 });
                 const b = buttons.find( x => !x.disabled ) || buttons[0];
                 if( b ){
@@ -415,7 +415,7 @@ class MainActivity : Activity() {
                 const buttons = [ ...document.querySelectorAll( 'button' ) ];
                 const b = buttons.find( x => {
                     const txt = (x.innerText || '').toUpperCase().trim();
-                    return txt === 'SEARCH TRAINS' || txt === 'SEARCH';
+                    return txt.includes('SEARCH TRAINS') || txt === 'SEARCH';
                 });
                 if(b){
                     b.removeAttribute('disabled');
@@ -444,7 +444,7 @@ class MainActivity : Activity() {
             val url = raw.trim('"')
             if (url.contains("/booking/train/search")) {
                 append("✓ Result page detected. Checking availability...")
-                handler.postDelayed({ if (running) checkResult(0) }, 2000)
+                handler.postDelayed({ if (running) checkResult(0) }, 2500)
             } else if (elapsed >= 90000) {
                 append("Result timeout. Moving to next route.")
                 moveToNextRouteOrGroup(false)
@@ -516,11 +516,11 @@ class MainActivity : Activity() {
                     "NO_TICKET" -> {
                         val (from, to) = getCurrentRoutes()[routeIndex]
                         append("✗ No ticket for $from → $to")
-                        moveToNextRouteOrGroup(false) // No ticket - will click result page alternate route
+                        moveToNextRouteOrGroup(false)
                     }
                     "AVAILABLE" -> {
                         val arr = o.getJSONArray("items")
-                        handleAvailable(arr) // Ticket available - will start next from home
+                        handleAvailable(arr)
                     }
                     else -> {
                         if (elapsed >= 30000) {
@@ -560,10 +560,11 @@ class MainActivity : Activity() {
 
         val message = sb.toString()
         append(message)
+        
+        // Send telegram and wait for confirmation before moving to the next step
         sendTelegram(message) {
             if (!running) return@sendTelegram
-            // Ticket found! Proceed to next route from Home Page.
-            moveToNextRouteOrGroup(true) 
+            moveToNextRouteOrGroup(true)
         }
     }
 
@@ -574,11 +575,9 @@ class MainActivity : Activity() {
 
         if (routeIndex < routes.size) {
             if (ticketFound) {
-                // Since ticket was found, start the NEXT route from the Home page
                 append("Starting next route from Home Page...")
                 runCurrentRoute(true)
             } else {
-                // No ticket was found. Click the alternate route DIRECTLY on the result page
                 val nextFrom = routes[routeIndex].first
                 val nextTo = routes[routeIndex].second
                 append("Clicking alternate route directly on result page...")
@@ -586,7 +585,6 @@ class MainActivity : Activity() {
                 clickAlternateRoute(nextFrom, nextTo, 0)
             }
         } else {
-            // Group is complete
             if (currentGroup == 1) {
                 append("=== GROUP 1 (Dhaka Routes) COMPLETED ===")
                 append("Waiting 13 seconds before starting Group 2 (Biman_Bandar)...")
@@ -596,7 +594,7 @@ class MainActivity : Activity() {
                     currentGroup = 2
                     routeIndex = 0
                     append("=== STARTING GROUP 2 (Biman_Bandar) ===")
-                    runCurrentRoute(true) // Start new group from home
+                    runCurrentRoute(true)
                 }, 13000L)
             } else {
                 append("=== GROUP 2 (Biman_Bandar) COMPLETED ===")
@@ -607,7 +605,7 @@ class MainActivity : Activity() {
                     currentGroup = 1
                     routeIndex = 0
                     append("=== RESTARTING FULL CYCLE FROM ROUTE 1 ===")
-                    runCurrentRoute(true) // Start new cycle from home
+                    runCurrentRoute(true)
                 }, 14000L)
             }
         }
@@ -617,24 +615,28 @@ class MainActivity : Activity() {
         if (!running) return
         val js = """
             (function(){
-                const targetText = '${from.uppercase()} - ${to.uppercase()}';
-                const buttons = [ ...document.querySelectorAll( 'button, a' ) ];
+                const targetFrom = '${from.uppercase()}';
+                const targetTo = '${to.uppercase()}';
                 
-                const b = buttons.find( x => {
-                    const txt = (x.innerText || '').toUpperCase().replace(/\s+/g, ' ');
-                    return txt.includes(targetText);
+                // রেজাল্ট পেজের রুট কার্ড বা অল্টারনেট অপশনগুলো খুঁজে দেখা
+                const elements = [ ...document.querySelectorAll( 'div, span, button, a' ) ];
+                const targetEl = elements.find( e => {
+                    const txt = (e.innerText || '').toUpperCase();
+                    return txt.includes(targetFrom) && txt.includes(targetTo);
                 });
                 
-                if( b ){
-                    // Clear the old text to avoid reading the old result before DOM updates
-                    document.querySelectorAll('*').forEach(e => {
-                        if(e.innerText && e.innerText.includes('NOT FINDING ANY TICKET')){
-                            e.innerText = 'LOADING NEW ROUTE...';
-                        }
-                    });
+                if( targetEl ){
+                    // কার্ডের ভেতরের বা আশপাশের 'Search' বাটন খোঁজা
+                    let container = targetEl.closest( '.single-trip-wrapper, .card, div' ) || targetEl;
+                    const btn = [ ...container.querySelectorAll( 'button, a' ) ].find( b => {
+                        const t = (b.innerText || '').toUpperCase();
+                        return t.includes('SEARCH') || t.includes('SELECT');
+                    }) || targetEl;
                     
-                    b.click();
-                    return 'CLICKED';
+                    if( btn && typeof btn.click === 'function' ){
+                        btn.click();
+                        return 'CLICKED';
+                    }
                 }
                 return 'NOT_FOUND';
             })()
@@ -644,14 +646,13 @@ class MainActivity : Activity() {
             val clean = result.trim('"')
             if (clean == "CLICKED") {
                 append("✓ Alternate route clicked ($from -> $to). Waiting for new result...")
-                // Wait 2.5 seconds for the DOM to update, then check result
-                handler.postDelayed({ if (running) checkResult(0) }, 2500)
+                handler.postDelayed({ if (running) checkResult(0) }, 3000)
             } else {
                 if (attempt > 10) {
                     append("Alternate route button not found. Falling back to Home page...")
                     runCurrentRoute(true)
                 } else {
-                    handler.postDelayed({ if (running) clickAlternateRoute(from, to, attempt + 1) }, 500)
+                    handler.postDelayed({ if (running) clickAlternateRoute(from, to, attempt + 1) }, 600)
                 }
             }
         }
