@@ -26,38 +26,91 @@ class MainActivity : Activity() {
     private lateinit var tokenEdit: EditText
     private lateinit var chatEdit: EditText
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val handler =
+        Handler(Looper.getMainLooper())
 
     private var running = false
+
     private var routeIndex = 0
+
+    /*
+     * Round number:
+     *
+     * Odd  = secondary Search #1
+     * Even = secondary Search #2
+     */
     private var cycle = 1
+
     private var targetDate = ""
 
+    /*
+     * ONLY FIRST 6 ROUTES
+     */
     private val routes = listOf(
+
         "Sylhet" to "Dhaka",
+
         "Maijgaon" to "Dhaka",
+
         "Kulaura" to "Dhaka",
+
         "Shamshernagar" to "Dhaka",
+
         "Sreemangal" to "Dhaka",
+
         "Shaistaganj" to "Dhaka"
     )
 
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor =
+        Executors.newSingleThreadExecutor()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
 
-        setContentView(R.layout.activity_main)
+        super.onCreate(
+            savedInstanceState
+        )
 
-        web = findViewById(R.id.webView)
-        log = findViewById(R.id.logText)
-        status = findViewById(R.id.statusText)
-        dateEdit = findViewById(R.id.dateEdit)
-        tokenEdit = findViewById(R.id.tokenEdit)
-        chatEdit = findViewById(R.id.chatEdit)
+        setContentView(
+            R.layout.activity_main
+        )
+
+        web =
+            findViewById(
+                R.id.webView
+            )
+
+        log =
+            findViewById(
+                R.id.logText
+            )
+
+        status =
+            findViewById(
+                R.id.statusText
+            )
+
+        dateEdit =
+            findViewById(
+                R.id.dateEdit
+            )
+
+        tokenEdit =
+            findViewById(
+                R.id.tokenEdit
+            )
+
+        chatEdit =
+            findViewById(
+                R.id.chatEdit
+            )
 
         val prefs =
-            getSharedPreferences("settings", MODE_PRIVATE)
+            getSharedPreferences(
+                "settings",
+                MODE_PRIVATE
+            )
 
         dateEdit.setText(
             prefs.getString(
@@ -82,20 +135,26 @@ class MainActivity : Activity() {
 
         setupWebView()
 
-        findViewById<Button>(R.id.dateButton)
-            .setOnClickListener {
-                pickDate()
-            }
+        findViewById<Button>(
+            R.id.dateButton
+        ).setOnClickListener {
 
-        findViewById<Button>(R.id.startButton)
-            .setOnClickListener {
-                startMonitor()
-            }
+            pickDate()
+        }
 
-        findViewById<Button>(R.id.stopButton)
-            .setOnClickListener {
-                stopMonitor()
-            }
+        findViewById<Button>(
+            R.id.startButton
+        ).setOnClickListener {
+
+            startMonitor()
+        }
+
+        findViewById<Button>(
+            R.id.stopButton
+        ).setOnClickListener {
+
+            stopMonitor()
+        }
 
         if (
             Build.VERSION.SDK_INT >= 33 &&
@@ -103,6 +162,7 @@ class MainActivity : Activity() {
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+
             requestPermissions(
                 arrayOf(
                     Manifest.permission.POST_NOTIFICATIONS
@@ -114,9 +174,14 @@ class MainActivity : Activity() {
 
     private fun setupWebView() {
 
-        web.settings.javaScriptEnabled = true
-        web.settings.domStorageEnabled = true
-        web.settings.databaseEnabled = true
+        web.settings.javaScriptEnabled =
+            true
+
+        web.settings.domStorageEnabled =
+            true
+
+        web.settings.databaseEnabled =
+            true
 
         web.settings.userAgentString =
             web.settings.userAgentString +
@@ -129,6 +194,7 @@ class MainActivity : Activity() {
                     view: WebView?,
                     url: String?
                 ) {
+
                     append(
                         "Page loaded: ${url ?: ""}"
                     )
@@ -143,15 +209,25 @@ class MainActivity : Activity() {
         )
     }
 
+    /*
+     * App's own date picker.
+     *
+     * This only selects the date that the user wants
+     * the Railway website calendar to select later.
+     */
     private fun pickDate() {
 
-        val c = Calendar.getInstance()
+        val c =
+            Calendar.getInstance()
 
         val current =
-            dateEdit.text.toString()
+            dateEdit.text
+                .toString()
                 .split("-")
 
-        if (current.size == 3) {
+        if (
+            current.size == 3
+        ) {
 
             try {
 
@@ -180,9 +256,15 @@ class MainActivity : Activity() {
                 )
 
             },
-            c.get(Calendar.YEAR),
-            c.get(Calendar.MONTH),
-            c.get(Calendar.DAY_OF_MONTH)
+            c.get(
+                Calendar.YEAR
+            ),
+            c.get(
+                Calendar.MONTH
+            ),
+            c.get(
+                Calendar.DAY_OF_MONTH
+            )
         ).show()
     }
 
@@ -192,11 +274,16 @@ class MainActivity : Activity() {
             return
 
         targetDate =
-            dateEdit.text.toString().trim()
+            dateEdit.text
+                .toString()
+                .trim()
 
         if (
-            !Regex("\\d{2}-\\d{2}-\\d{4}")
-                .matches(targetDate)
+            !Regex(
+                "\\d{2}-\\d{2}-\\d{4}"
+            ).matches(
+                targetDate
+            )
         ) {
 
             Toast.makeText(
@@ -228,7 +315,9 @@ class MainActivity : Activity() {
             .apply()
 
         running = true
+
         routeIndex = 0
+
         cycle = 1
 
         append(
@@ -240,11 +329,16 @@ class MainActivity : Activity() {
         )
 
         append(
-            "Round 1 started (Odd → Secondary Search #1)"
+            "Round 1: Odd → secondary Search #1"
         )
 
-        setStatus("Running")
+        setStatus(
+            "Running"
+        )
 
+        /*
+         * ALWAYS START FROM ROUTE 1
+         */
         runRoute(0)
     }
 
@@ -256,24 +350,37 @@ class MainActivity : Activity() {
             null
         )
 
-        setStatus("Stopped")
+        setStatus(
+            "Stopped"
+        )
 
         append(
             "=== MONITOR STOPPED ==="
         )
     }
 
-    private fun runRoute(index: Int) {
+    /*
+     * Start one route from a fresh Home page.
+     */
+    private fun runRoute(
+        index: Int
+    ) {
 
         if (!running)
             return
 
-        if (index !in routes.indices)
+        if (
+            index !in routes.indices
+        )
             return
 
-        routeIndex = index
+        routeIndex =
+            index
 
-        val (from, to) =
+        val (
+            from,
+            to
+        ) =
             routes[index]
 
         append(
@@ -284,20 +391,27 @@ class MainActivity : Activity() {
             "Searching ${index + 1}/6: $from → $to"
         )
 
+        /*
+         * Fresh Home page.
+         */
         web.loadUrl(
             "https://eticket.railway.gov.bd/"
         )
 
+        /*
+         * Wait for Home page.
+         */
         handler.postDelayed(
             {
 
-                if (running) {
-                    fillAndSearch(
-                        from,
-                        to,
-                        0
-                    )
-                }
+                if (!running)
+                    return@postDelayed
+
+                fillAndSearch(
+                    from,
+                    to,
+                    0
+                )
 
             },
             2200
@@ -305,12 +419,12 @@ class MainActivity : Activity() {
     }
 
     /*
-     * Fill From / To / Class.
+     * Fill From + To + Seat Class.
      *
      * IMPORTANT:
-     * Date is NOT directly assigned to the input.
-     * The real website calendar is opened and the requested
-     * day is clicked from that calendar.
+     * The date is NOT injected into the input.
+     *
+     * The real "Pick a date" field is clicked.
      */
     private fun fillAndSearch(
         from: String,
@@ -321,442 +435,299 @@ class MainActivity : Activity() {
         if (!running)
             return
 
-        if (attempt >= 60) {
+        val js =
+            """
+            (function(){
 
-            append(
-                "Could not complete form selection safely."
-            )
+              const from =
+                ${JSONObject.quote(from)};
 
-            nextRoute()
+              const to =
+                ${JSONObject.quote(to)};
 
-            return
-        }
+              function visible(e){
 
-        val js = """
-        (function(){
-
-          const from = ${JSONObject.quote(from)};
-          const to = ${JSONObject.quote(to)};
-          const target = ${JSONObject.quote(targetDate)};
-
-          function visible(e){
-            if(!e) return false;
-
-            return !!(
-              e.offsetWidth ||
-              e.offsetHeight ||
-              e.getClientRects().length
-            );
-          }
-
-          function vis(selector){
-
-            return [...document.querySelectorAll(selector)]
-              .find(e => visible(e));
-          }
-
-          function fire(e){
-
-            ['input','change','blur'].forEach(type => {
-
-              e.dispatchEvent(
-                new Event(
-                  type,
-                  {
-                    bubbles:true
-                  }
-                )
-              );
-
-            });
-          }
-
-          function setInput(name, ctrl){
-
-            const e =
-              vis(
-                'input[formcontrolname="' +
-                ctrl +
-                '"]'
-              );
-
-            if(!e)
-              return false;
-
-            e.focus();
-
-            const setter =
-              Object.getOwnPropertyDescriptor(
-                HTMLInputElement.prototype,
-                'value'
-              ).set;
-
-            setter.call(
-              e,
-              name
-            );
-
-            fire(e);
-
-            return true;
-          }
-
-          function clickAgree(){
-
-            [...document.querySelectorAll(
-              'button,[role="button"],select,option'
-            )].forEach(e => {
-
-              const text =
-                (
-                  e.innerText ||
-                  e.textContent ||
-                  ''
-                ).trim();
-
-              if(text === 'I AGREE'){
-                e.click();
+                return !!(
+                  e &&
+                  (
+                    e.offsetWidth ||
+                    e.offsetHeight ||
+                    e.getClientRects().length
+                  )
+                );
               }
 
-            });
+              function vis(selector){
 
-          }
+                return [
+                  ...document.querySelectorAll(
+                    selector
+                  )
+                ].find(
+                  e => visible(e)
+                );
+              }
 
-          function setClass(){
+              function fire(e){
 
-            const selects =
-              [...document.querySelectorAll('select')];
+                [
+                  'input',
+                  'change',
+                  'blur'
+                ].forEach(type => {
 
-            selects.forEach(s => {
+                  e.dispatchEvent(
+                    new Event(
+                      type,
+                      {
+                        bubbles:true
+                      }
+                    )
+                  );
 
-              [...s.options].forEach(o => {
+                });
+              }
 
-                const value =
-                  (o.value || '').trim();
+              function setCity(
+                name,
+                ctrl
+              ){
+
+                const e =
+                  vis(
+                    'input[formcontrolname="' +
+                    ctrl +
+                    '"]'
+                  );
+
+                if(!e)
+                  return false;
+
+                e.focus();
+
+                const setter =
+                  Object.getOwnPropertyDescriptor(
+                    HTMLInputElement.prototype,
+                    'value'
+                  ).set;
+
+                setter.call(
+                  e,
+                  name
+                );
+
+                fire(e);
+
+                return true;
+              }
+
+              function setClass(){
+
+                const selects =
+                  [
+                    ...document.querySelectorAll(
+                      'select'
+                    )
+                  ];
+
+                selects.forEach(s => {
+
+                  [
+                    ...s.options
+                  ].forEach(o => {
+
+                    if(
+                      o.value ===
+                        'S_CHAIR' ||
+
+                      (
+                        o.textContent ||
+                        ''
+                      ).trim() ===
+                        'S_CHAIR'
+                    ){
+
+                      o.selected = true;
+
+                      fire(s);
+                    }
+
+                  });
+
+                });
+
+                const txt =
+                  [
+                    ...document.querySelectorAll(
+                      '*'
+                    )
+                  ].find(
+                    e =>
+                      e.childElementCount === 0 &&
+                      (
+                        e.textContent ||
+                        ''
+                      ).trim() ===
+                        'S_CHAIR' &&
+                      visible(e)
+                  );
+
+                if(txt)
+                  txt.click();
+              }
+
+              function findDateField(){
+
+                const inputs =
+                  [
+                    ...document.querySelectorAll(
+                      'input'
+                    )
+                  ].filter(
+                    e => visible(e)
+                  );
+
+                return inputs.find(e => {
+
+                  const placeholder =
+                    (
+                      e.getAttribute(
+                        'placeholder'
+                      ) || ''
+                    )
+                    .trim()
+                    .toLowerCase();
+
+                  const value =
+                    (
+                      e.value ||
+                      ''
+                    )
+                    .trim()
+                    .toLowerCase();
+
+                  const aria =
+                    (
+                      e.getAttribute(
+                        'aria-label'
+                      ) || ''
+                    )
+                    .trim()
+                    .toLowerCase();
+
+                  return (
+                    placeholder ===
+                      'pick a date' ||
+
+                    value ===
+                      'pick a date' ||
+
+                    aria ===
+                      'pick a date'
+                  );
+
+                }) ||
+
+                vis(
+                  'input[formcontrolname="doj"]'
+                ) ||
+
+                vis(
+                  'input#doj'
+                );
+              }
+
+              /*
+               * Close I AGREE if present.
+               */
+              [
+                ...document.querySelectorAll(
+                  'button,[role="button"]'
+                )
+              ].forEach(e => {
 
                 const text =
-                  (o.textContent || '').trim();
+                  (
+                    e.innerText ||
+                    e.textContent ||
+                    ''
+                  ).trim();
 
                 if(
-                  value === 'S_CHAIR' ||
-                  text === 'S_CHAIR'
+                  text ===
+                    'I AGREE'
                 ){
 
-                  o.selected = true;
-
-                  fire(s);
+                  e.click();
                 }
 
               });
 
-            });
-
-            const textElement =
-              [...document.querySelectorAll('*')]
-                .find(e =>
-                  e.childElementCount === 0 &&
-                  (
-                    e.textContent ||
-                    ''
-                  ).trim() === 'S_CHAIR' &&
-                  visible(e)
+              const fromOK =
+                setCity(
+                  from,
+                  'fromcity'
                 );
 
-            if(textElement)
-              textElement.click();
-          }
+              const toOK =
+                setCity(
+                  to,
+                  'tocity'
+                );
 
-          function findDateInput(){
-
-            return (
-              vis('input.datepicker.hasDatepicker') ||
-              vis('input[formcontrolname="doj"]') ||
-              vis('input#doj')
-            );
-
-          }
-
-          function findCalendar(){
-
-            const candidates =
-              [
-                ...document.querySelectorAll(
-                  '.ui-datepicker'
-                )
-              ];
-
-            return candidates.find(
-              e => visible(e)
-            );
-          }
-
-          function targetParts(){
-
-            const p =
-              target.split('-');
-
-            return {
-              day:parseInt(p[0],10),
-              month:parseInt(p[1],10) - 1,
-              year:parseInt(p[2],10)
-            };
-          }
-
-          function calendarParts(dp){
-
-            const monthSelect =
-              dp.querySelector(
-                'select.ui-datepicker-month'
-              );
-
-            const yearSelect =
-              dp.querySelector(
-                'select.ui-datepicker-year'
-              );
-
-            if(
-              monthSelect &&
-              yearSelect
-            ){
-
-              return {
-                month:parseInt(
-                  monthSelect.value,
-                  10
-                ),
-
-                year:parseInt(
-                  yearSelect.value,
-                  10
-                )
-              };
-
-            }
-
-            const title =
-              dp.querySelector(
-                '.ui-datepicker-title'
-              );
-
-            if(!title)
-              return null;
-
-            const titleText =
-              title.innerText || '';
-
-            const yearMatch =
-              titleText.match(/\d{4}/);
-
-            if(!yearMatch)
-              return null;
-
-            const names = [
-              'January',
-              'February',
-              'March',
-              'April',
-              'May',
-              'June',
-              'July',
-              'August',
-              'September',
-              'October',
-              'November',
-              'December'
-            ];
-
-            let month = -1;
-
-            for(
-              let i = 0;
-              i < names.length;
-              i++
-            ){
+              setClass();
 
               if(
-                titleText
-                  .toLowerCase()
-                  .includes(
-                    names[i].toLowerCase()
-                  )
+                !fromOK ||
+                !toOK
               ){
 
-                month = i;
-                break;
+                return 'WAIT_CITY';
               }
 
-            }
+              const dateField =
+                findDateField();
 
-            if(month < 0)
-              return null;
+              if(!dateField){
 
-            return {
-              month:month,
-              year:parseInt(
-                yearMatch[0],
-                10
-              )
-            };
-          }
-
-          function clickRequestedDay(){
-
-            const dp =
-              findCalendar();
-
-            if(!dp)
-              return 'NO_CALENDAR';
-
-            const parts =
-              targetParts();
-
-            const days =
-              [
-                ...dp.querySelectorAll(
-                  'td[data-handler="selectDay"]'
-                )
-              ];
-
-            for(
-              const td of days
-            ){
-
-              const y =
-                parseInt(
-                  td.getAttribute(
-                    'data-year'
-                  ),
-                  10
-                );
-
-              const m =
-                parseInt(
-                  td.getAttribute(
-                    'data-month'
-                  ),
-                  10
-                );
-
-              const a =
-                td.querySelector(
-                  'a.ui-state-default'
-                );
-
-              if(
-                a &&
-                y === parts.year &&
-                m === parts.month &&
-                (
-                  a.textContent ||
-                  ''
-                ).trim() ===
-                String(parts.day)
-              ){
-
-                a.click();
-
-                return 'DATE_CLICKED';
+                return 'WAIT_DATE_FIELD';
               }
-            }
 
-            return 'DAY_NOT_FOUND';
-          }
+              /*
+               * VERY IMPORTANT:
+               *
+               * Do NOT assign a date value here.
+               *
+               * Only click the Railway date field.
+               */
+              dateField.focus();
 
-          function moveCalendar(){
+              dateField.click();
 
-            const dp =
-              findCalendar();
+              return 'DATE_FIELD_CLICKED';
 
-            if(!dp)
-              return 'NO_CALENDAR';
+            })()
+            """.trimIndent()
 
-            const targetPartsValue =
-              targetParts();
+        eval(js) { result ->
 
-            const current =
-              calendarParts(dp);
+            val clean =
+                result
+                    .trim('"')
+                    .replace(
+                        "\\\"",
+                        "\""
+                    )
 
-            if(!current)
-              return 'NO_CALENDAR_INFO';
+            append(
+                "Form step: $clean"
+            )
 
-            if(
-              current.year ===
-                targetPartsValue.year &&
-              current.month ===
-                targetPartsValue.month
-            ){
-
-              return clickRequestedDay();
-            }
-
-            const currentIndex =
-              current.year * 12 +
-              current.month;
-
-            const targetIndex =
-              targetPartsValue.year * 12 +
-              targetPartsValue.month;
-
-            let button;
-
-            if(targetIndex > currentIndex){
-
-              button =
-                dp.querySelector(
-                  '.ui-datepicker-next:not(.ui-state-disabled)'
-                );
-
-            } else {
-
-              button =
-                dp.querySelector(
-                  '.ui-datepicker-prev:not(.ui-state-disabled)'
-                );
-
-            }
-
-            if(!button)
-              return 'NO_NAV_BUTTON';
-
-            button.click();
-
-            return 'MOVED';
-          }
-
-          clickAgree();
-
-          setInput(
-            from,
-            'fromcity'
-          );
-
-          setInput(
-            to,
-            'tocity'
-          );
-
-          setClass();
-
-          const dateInput =
-            findDateInput();
-
-          if(!dateInput)
-            return 'WAIT_DATE_INPUT';
-
-          /*
-           * Do NOT assign targetDate to dateInput.value.
-           * Open the actual Railway website calendar.
-           */
-          dateInput.focus();
-          dateInput.click();
-
-          return 'CALENDAR_OPENING';
-
-        })()
-        """.trimIndent()
-
-        eval(js) {
-
+            /*
+             * NEVER change route here.
+             *
+             * Continue working on SAME route.
+             */
             handler.postDelayed(
                 {
 
@@ -770,14 +741,15 @@ class MainActivity : Activity() {
                     )
 
                 },
-                500
+                700
             )
         }
     }
 
     /*
-     * Select the requested date by navigating the actual
-     * website calendar and clicking its day.
+     * Select date from the ACTUAL Railway website calendar.
+     *
+     * No direct value assignment.
      */
     private fun selectDateFromCalendar(
         from: String,
@@ -788,257 +760,380 @@ class MainActivity : Activity() {
         if (!running)
             return
 
-        if (attempt >= 40) {
+        val js =
+            """
+            (function(){
 
-            append(
-                "Date calendar selection timeout."
-            )
+              const target =
+                ${JSONObject.quote(targetDate)};
 
-            nextRoute()
+              function visible(e){
 
-            return
-        }
-
-        val js = """
-        (function(){
-
-          const target =
-            ${JSONObject.quote(targetDate)};
-
-          function visible(e){
-
-            return !!(
-              e &&
-              (
-                e.offsetWidth ||
-                e.offsetHeight ||
-                e.getClientRects().length
-              )
-            );
-          }
-
-          const dp =
-            [...document.querySelectorAll(
-              '.ui-datepicker'
-            )]
-            .find(e => visible(e));
-
-          if(!dp)
-            return 'NO_CALENDAR';
-
-          const p =
-            target.split('-');
-
-          const day =
-            parseInt(p[0],10);
-
-          const month =
-            parseInt(p[1],10) - 1;
-
-          const year =
-            parseInt(p[2],10);
-
-          const monthSelect =
-            dp.querySelector(
-              'select.ui-datepicker-month'
-            );
-
-          const yearSelect =
-            dp.querySelector(
-              'select.ui-datepicker-year'
-            );
-
-          let currentMonth = -1;
-          let currentYear = -1;
-
-          if(
-            monthSelect &&
-            yearSelect
-          ){
-
-            currentMonth =
-              parseInt(
-                monthSelect.value,
-                10
-              );
-
-            currentYear =
-              parseInt(
-                yearSelect.value,
-                10
-              );
-
-          } else {
-
-            const title =
-              dp.querySelector(
-                '.ui-datepicker-title'
-              );
-
-            if(!title)
-              return 'NO_TITLE';
-
-            const text =
-              title.innerText || '';
-
-            const ym =
-              text.match(/\d{4}/);
-
-            if(!ym)
-              return 'NO_YEAR';
-
-            currentYear =
-              parseInt(
-                ym[0],
-                10
-              );
-
-            const names = [
-              'January',
-              'February',
-              'March',
-              'April',
-              'May',
-              'June',
-              'July',
-              'August',
-              'September',
-              'October',
-              'November',
-              'December'
-            ];
-
-            for(
-              let i=0;
-              i<names.length;
-              i++
-            ){
-
-              if(
-                text
-                  .toLowerCase()
-                  .includes(
-                    names[i].toLowerCase()
+                return !!(
+                  e &&
+                  (
+                    e.offsetWidth ||
+                    e.offsetHeight ||
+                    e.getClientRects().length
                   )
-              ){
-
-                currentMonth = i;
-                break;
+                );
               }
 
-            }
-          }
-
-          if(
-            currentMonth === month &&
-            currentYear === year
-          ){
-
-            const cells =
-              [
-                ...dp.querySelectorAll(
-                  'td[data-handler="selectDay"]'
-                )
-              ];
-
-            for(
-              const td of cells
-            ){
-
-              const tdYear =
-                parseInt(
-                  td.getAttribute(
-                    'data-year'
-                  ),
-                  10
-                );
-
-              const tdMonth =
-                parseInt(
-                  td.getAttribute(
-                    'data-month'
-                  ),
-                  10
-                );
-
-              const a =
-                td.querySelector(
-                  'a.ui-state-default'
+              const calendars =
+                [
+                  ...document.querySelectorAll(
+                    '.ui-datepicker,' +
+                    '.mat-datepicker-content,' +
+                    '[role="dialog"],' +
+                    '[role="grid"]'
+                  )
+                ].filter(
+                  e => visible(e)
                 );
 
               if(
-                a &&
-                tdYear === year &&
-                tdMonth === month &&
-                (
-                  a.textContent ||
-                  ''
-                ).trim() ===
-                String(day)
+                calendars.length === 0
               ){
 
-                a.click();
-
-                return 'DATE_CLICKED';
+                return 'CALENDAR_NOT_OPEN';
               }
-            }
 
-            return 'DAY_NOT_FOUND';
-          }
+              const p =
+                target.split('-');
 
-          const currentIndex =
-            currentYear * 12 +
-            currentMonth;
+              const wantedDay =
+                parseInt(
+                  p[0],
+                  10
+                );
 
-          const targetIndex =
-            year * 12 +
-            month;
+              const wantedMonth =
+                parseInt(
+                  p[1],
+                  10
+                ) - 1;
 
-          let nav = null;
+              const wantedYear =
+                parseInt(
+                  p[2],
+                  10
+                );
 
-          if(
-            targetIndex >
-            currentIndex
-          ){
+              /*
+               * Railway currently uses a
+               * jQuery-UI style calendar.
+               */
+              const ui =
+                calendars.find(
+                  e =>
+                    e.matches(
+                      '.ui-datepicker'
+                    ) ||
+                    e.querySelector(
+                      'td[data-handler="selectDay"]'
+                    )
+                );
 
-            nav =
-              dp.querySelector(
-                '.ui-datepicker-next:not(.ui-state-disabled)'
-              );
+              if(ui){
 
-          } else {
+                const cells =
+                  [
+                    ...ui.querySelectorAll(
+                      'td[data-handler="selectDay"]'
+                    )
+                  ];
 
-            nav =
-              dp.querySelector(
-                '.ui-datepicker-prev:not(.ui-state-disabled)'
-              );
-          }
+                /*
+                 * First attempt to click the requested
+                 * date if it is already visible.
+                 */
+                for(
+                  const td of cells
+                ){
 
-          if(!nav)
-            return 'NO_NAV';
+                  const y =
+                    parseInt(
+                      td.getAttribute(
+                        'data-year'
+                      ),
+                      10
+                    );
 
-          nav.click();
+                  const m =
+                    parseInt(
+                      td.getAttribute(
+                        'data-month'
+                      ),
+                      10
+                    );
 
-          return 'MOVED';
+                  const a =
+                    td.querySelector(
+                      'a.ui-state-default'
+                    );
 
-        })()
-        """.trimIndent()
+                  if(
+                    a &&
+                    y === wantedYear &&
+                    m === wantedMonth &&
+                    (
+                      a.textContent ||
+                      ''
+                    ).trim() ===
+                      String(wantedDay)
+                  ){
+
+                    a.click();
+
+                    return 'DATE_CLICKED';
+                  }
+                }
+
+                /*
+                 * Date not visible.
+                 *
+                 * Navigate calendar month.
+                 */
+                const monthSelect =
+                  ui.querySelector(
+                    'select.ui-datepicker-month'
+                  );
+
+                const yearSelect =
+                  ui.querySelector(
+                    'select.ui-datepicker-year'
+                  );
+
+                let currentMonth =
+                  -1;
+
+                let currentYear =
+                  -1;
+
+                if(
+                  monthSelect &&
+                  yearSelect
+                ){
+
+                  currentMonth =
+                    parseInt(
+                      monthSelect.value,
+                      10
+                    );
+
+                  currentYear =
+                    parseInt(
+                      yearSelect.value,
+                      10
+                    );
+
+                } else {
+
+                  const title =
+                    ui.querySelector(
+                      '.ui-datepicker-title'
+                    );
+
+                  if(title){
+
+                    const text =
+                      title.innerText ||
+                      '';
+
+                    const ym =
+                      text.match(
+                        /\d{4}/
+                      );
+
+                    if(ym){
+
+                      currentYear =
+                        parseInt(
+                          ym[0],
+                          10
+                        );
+
+                      const months = [
+                        'January',
+                        'February',
+                        'March',
+                        'April',
+                        'May',
+                        'June',
+                        'July',
+                        'August',
+                        'September',
+                        'October',
+                        'November',
+                        'December'
+                      ];
+
+                      for(
+                        let i = 0;
+                        i < months.length;
+                        i++
+                      ){
+
+                        if(
+                          text
+                            .toLowerCase()
+                            .includes(
+                              months[i]
+                                .toLowerCase()
+                            )
+                        ){
+
+                          currentMonth =
+                            i;
+
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+
+                if(
+                  currentMonth >= 0 &&
+                  currentYear >= 0
+                ){
+
+                  const currentIndex =
+                    currentYear * 12 +
+                    currentMonth;
+
+                  const targetIndex =
+                    wantedYear * 12 +
+                    wantedMonth;
+
+                  let nav = null;
+
+                  if(
+                    targetIndex >
+                    currentIndex
+                  ){
+
+                    nav =
+                      ui.querySelector(
+                        '.ui-datepicker-next' +
+                        ':not(.ui-state-disabled)'
+                      );
+
+                  } else if(
+                    targetIndex <
+                    currentIndex
+                  ){
+
+                    nav =
+                      ui.querySelector(
+                        '.ui-datepicker-prev' +
+                        ':not(.ui-state-disabled)'
+                      );
+                  }
+
+                  if(nav){
+
+                    nav.click();
+
+                    return 'CALENDAR_MOVED';
+                  }
+                }
+
+                return 'DATE_NOT_VISIBLE';
+              }
+
+              /*
+               * Generic calendar fallback.
+               *
+               * Still clicks a real calendar element.
+               * Never writes input.value.
+               */
+              const generic =
+                calendars[0];
+
+              const dayElements =
+                [
+                  ...generic.querySelectorAll(
+                    '[role="gridcell"],button,td'
+                  )
+                ]
+                .filter(
+                  e => visible(e)
+                );
+
+              for(
+                const el of dayElements
+              ){
+
+                const text =
+                  (
+                    el.innerText ||
+                    el.textContent ||
+                    ''
+                  ).trim();
+
+                const aria =
+                  (
+                    el.getAttribute(
+                      'aria-label'
+                    ) || ''
+                  ).trim();
+
+                const dataDate =
+                  (
+                    el.getAttribute(
+                      'data-date'
+                    ) || ''
+                  ).trim();
+
+                if(
+                  aria.includes(target) ||
+                  dataDate === target
+                ){
+
+                  el.click();
+
+                  return 'DATE_CLICKED';
+                }
+
+                if(
+                  text ===
+                    String(wantedDay)
+                ){
+
+                  el.click();
+
+                  return 'DATE_CLICKED';
+                }
+              }
+
+              return 'DATE_NOT_FOUND';
+
+            })()
+            """.trimIndent()
 
         eval(js) { result ->
 
             val clean =
                 result
                     .trim('"')
-                    .replace("\\\"", "\"")
-
-            when {
-
-                clean == "DATE_CLICKED" -> {
-
-                    append(
-                        "Date selected from Railway calendar: $targetDate"
+                    .replace(
+                        "\\\"",
+                        "\""
                     )
 
+            when(clean){
+
+                "DATE_CLICKED" -> {
+
+                    append(
+                        "✓ Railway calendar date selected: $targetDate"
+                    )
+
+                    /*
+                     * ONLY AFTER ACTUAL DATE SELECTION:
+                     * wait for Search button.
+                     */
                     waitForSearchEnabled(
                         from,
                         to,
@@ -1046,35 +1141,54 @@ class MainActivity : Activity() {
                     )
                 }
 
-                clean == "MOVED" -> {
+                "CALENDAR_MOVED" -> {
 
                     handler.postDelayed(
                         {
 
-                            selectDateFromCalendar(
-                                from,
-                                to,
-                                attempt + 1
-                            )
+                            if(running){
+
+                                selectDateFromCalendar(
+                                    from,
+                                    to,
+                                    attempt + 1
+                                )
+                            }
 
                         },
-                        250
+                        400
                     )
                 }
 
                 else -> {
 
+                    /*
+                     * Calendar/date selection failed.
+                     *
+                     * DO NOT CHANGE ROUTE.
+                     */
+                    if(
+                        attempt % 10 == 0
+                    ){
+
+                        append(
+                            "Waiting for Railway calendar... ($clean)"
+                        )
+                    }
+
                     handler.postDelayed(
                         {
 
-                            selectDateFromCalendar(
+                            if(!running)
+                                return@postDelayed
+
+                            reopenDateCalendar(
                                 from,
-                                to,
-                                attempt + 1
+                                to
                             )
 
                         },
-                        400
+                        700
                     )
                 }
             }
@@ -1082,7 +1196,126 @@ class MainActivity : Activity() {
     }
 
     /*
-     * Wait until the MAIN home-page Search button becomes enabled.
+     * Re-open the actual Pick a date field.
+     *
+     * This is used when the calendar disappears
+     * before the requested date is selected.
+     */
+    private fun reopenDateCalendar(
+        from: String,
+        to: String
+    ) {
+
+        if(!running)
+            return
+
+        val js =
+            """
+            (function(){
+
+              function visible(e){
+
+                return !!(
+                  e &&
+                  (
+                    e.offsetWidth ||
+                    e.offsetHeight ||
+                    e.getClientRects().length
+                  )
+                );
+              }
+
+              const inputs =
+                [
+                  ...document.querySelectorAll(
+                    'input'
+                  )
+                ]
+                .filter(
+                  e => visible(e)
+                );
+
+              const dateField =
+                inputs.find(e => {
+
+                  const placeholder =
+                    (
+                      e.getAttribute(
+                        'placeholder'
+                      ) || ''
+                    )
+                    .trim()
+                    .toLowerCase();
+
+                  const value =
+                    (
+                      e.value ||
+                      ''
+                    )
+                    .trim()
+                    .toLowerCase();
+
+                  return (
+                    placeholder ===
+                      'pick a date' ||
+
+                    value ===
+                      'pick a date'
+                  );
+
+                }) ||
+
+                inputs.find(
+                  e =>
+                    e.matches(
+                      'input[formcontrolname="doj"]'
+                    )
+                ) ||
+
+                document.querySelector(
+                  'input#doj'
+                );
+
+              if(!dateField)
+                return 'NO_DATE_FIELD';
+
+              /*
+               * Only click the field.
+               */
+              dateField.focus();
+
+              dateField.click();
+
+              return 'DATE_FIELD_CLICKED';
+
+            })()
+            """.trimIndent()
+
+        eval(js) {
+
+            handler.postDelayed(
+                {
+
+                    if(running){
+
+                        selectDateFromCalendar(
+                            from,
+                            to,
+                            0
+                        )
+                    }
+
+                },
+                500
+            )
+        }
+    }
+
+    /*
+     * Search is allowed ONLY after:
+     *
+     * 1. Date is no longer "Pick a date"
+     * 2. Main Search button is enabled
      */
     private fun waitForSearchEnabled(
         from: String,
@@ -1090,77 +1323,191 @@ class MainActivity : Activity() {
         attempt: Int
     ) {
 
-        if (!running)
+        if(!running)
             return
 
-        if (attempt >= 60) {
+        val js =
+            """
+            (function(){
 
-            append(
-                "Main Search button did not become enabled."
-            )
+              function visible(e){
 
-            nextRoute()
+                return !!(
+                  e &&
+                  (
+                    e.offsetWidth ||
+                    e.offsetHeight ||
+                    e.getClientRects().length
+                  )
+                );
+              }
 
-            return
-        }
+              /*
+               * Verify date field.
+               */
+              const inputs =
+                [
+                  ...document.querySelectorAll(
+                    'input'
+                  )
+                ]
+                .filter(
+                  e => visible(e)
+                );
 
-        val js = """
-        (function(){
+              const dateField =
+                inputs.find(e => {
 
-          const buttons =
-            [...document.querySelectorAll('button')];
+                  const p =
+                    (
+                      e.getAttribute(
+                        'placeholder'
+                      ) || ''
+                    )
+                    .trim()
+                    .toLowerCase();
 
-          const b =
-            buttons.find(
-              x =>
+                  const v =
+                    (
+                      e.value ||
+                      ''
+                    )
+                    .trim()
+                    .toLowerCase();
+
+                  return (
+                    p === 'pick a date' ||
+                    v === 'pick a date'
+                  );
+
+                }) ||
+
+                inputs.find(
+                  e =>
+                    e.matches(
+                      'input[formcontrolname="doj"]'
+                    )
+                ) ||
+
+                document.querySelector(
+                  'input#doj'
+                );
+
+              if(!dateField)
+                return 'WAIT_DATE_FIELD';
+
+              const dateValue =
                 (
-                  x.innerText ||
+                  dateField.value ||
                   ''
-                ).trim() === 'Search'
-            );
+                ).trim();
 
-          if(
-            b &&
-            !b.disabled
-          ){
+              /*
+               * Date not selected yet.
+               */
+              if(
+                !dateValue ||
+                dateValue.toLowerCase() ===
+                  'pick a date'
+              ){
 
-            return 'READY';
-          }
+                return 'WAIT_DATE';
+              }
 
-          return 'WAIT';
+              /*
+               * Find Search buttons.
+               */
+              const buttons =
+                [
+                  ...document.querySelectorAll(
+                    'button'
+                  )
+                ]
+                .filter(
+                  b =>
+                    visible(b) &&
+                    (
+                      b.innerText ||
+                      ''
+                    ).trim() ===
+                      'Search'
+                );
 
-        })()
-        """.trimIndent()
+              /*
+               * At Home page there should be an
+               * enabled Search button.
+               */
+              const enabled =
+                buttons.find(
+                  b => !b.disabled
+                );
+
+              if(enabled)
+                return 'READY';
+
+              return 'WAIT_SEARCH';
+
+            })()
+            """.trimIndent()
 
         eval(js) { result ->
 
             val clean =
                 result
                     .trim('"')
+                    .replace(
+                        "\\\"",
+                        "\""
+                    )
 
-            if(clean == "READY") {
+            if(
+                clean ==
+                    "READY"
+            ){
 
                 append(
-                    "Main Search enabled."
+                    "✓ All fields filled. Main Search ENABLED."
                 )
 
                 handler.postDelayed(
                     {
-                        clickFirstSearch()
+
+                        if(running)
+                            clickFirstSearch()
+
                     },
                     300
                 )
 
             } else {
 
+                /*
+                 * CRITICAL:
+                 *
+                 * Search disabled:
+                 * DO NOT move route.
+                 * DO NOT start search.
+                 */
+                if(
+                    attempt % 10 == 0
+                ){
+
+                    append(
+                        "Waiting for Search to enable: $clean"
+                    )
+                }
+
                 handler.postDelayed(
                     {
 
-                        waitForSearchEnabled(
-                            from,
-                            to,
-                            attempt + 1
-                        )
+                        if(running){
+
+                            waitForSearchEnabled(
+                                from,
+                                to,
+                                attempt + 1
+                            )
+                        }
 
                     },
                     500
@@ -1169,69 +1516,119 @@ class MainActivity : Activity() {
         }
     }
 
+    /*
+     * Click ONLY enabled main Search.
+     */
     private fun clickFirstSearch() {
 
-        if (!running)
+        if(!running)
             return
 
-        val js = """
-        (function(){
+        val js =
+            """
+            (function(){
 
-          const b =
-            [...document.querySelectorAll(
-              'button'
-            )]
-            .find(
-              x =>
-                (
-                  x.innerText ||
-                  ''
-                ).trim() === 'Search' &&
-                !x.disabled
-            );
+              const buttons =
+                [
+                  ...document.querySelectorAll(
+                    'button'
+                  )
+                ]
+                .filter(
+                  b =>
+                    (
+                      b.innerText ||
+                      ''
+                    ).trim() ===
+                      'Search'
+                );
 
-          if(b){
+              const b =
+                buttons.find(
+                  x =>
+                    !x.disabled
+                );
 
-            b.click();
+              if(
+                b &&
+                !b.disabled
+              ){
 
-            return 'CLICKED';
-          }
+                b.click();
 
-          return 'NO';
+                return 'CLICKED';
+              }
 
-        })()
-        """.trimIndent()
+              return 'NOT_ENABLED';
+
+            })()
+            """.trimIndent()
 
         eval(js) { result ->
 
             val clean =
                 result.trim('"')
 
-            if(clean == "CLICKED") {
+            if(
+                clean ==
+                    "CLICKED"
+            ){
 
                 append(
-                    "Main Search clicked; waiting for Railway result..."
+                    "✓ Main Search clicked."
                 )
 
+                /*
+                 * Wait for actual result page.
+                 */
                 waitResult(0)
 
             } else {
 
+                /*
+                 * Search did not click.
+                 *
+                 * Stay on SAME route.
+                 */
+                append(
+                    "Search is not enabled. Staying on current route."
+                )
+
                 handler.postDelayed(
                     {
-                        clickFirstSearch()
+
+                        if(running){
+
+                            waitForSearchEnabled(
+                                routes[
+                                    routeIndex
+                                ].first,
+
+                                routes[
+                                    routeIndex
+                                ].second,
+
+                                0
+                            )
+                        }
+
                     },
-                    500
+                    700
                 )
             }
         }
     }
 
+    /*
+     * Wait for Railway result URL.
+     *
+     * No result page = no route change.
+     */
     private fun waitResult(
         elapsed: Int
     ) {
 
-        if (!running)
+        if(!running)
             return
 
         eval(
@@ -1248,16 +1645,24 @@ class MainActivity : Activity() {
             ){
 
                 append(
-                    "Result page detected. Waiting 2 seconds before checking result..."
+                    "✓ Result page detected."
+                )
+
+                append(
+                    "Waiting 2 seconds before result check..."
                 )
 
                 /*
-                 * Mandatory minimum 2-second pause
-                 * whenever a result page is detected.
+                 * Mandatory 2-second pause.
                  */
                 handler.postDelayed(
                     {
-                        checkResult(0)
+
+                        if(running){
+
+                            checkResult(0)
+                        }
+
                     },
                     2000
                 )
@@ -1266,19 +1671,43 @@ class MainActivity : Activity() {
                 elapsed >= 90000
             ){
 
+                /*
+                 * IMPORTANT:
+                 *
+                 * Even timeout does NOT mean
+                 * route can be changed immediately.
+                 *
+                 * We remain on current route and
+                 * continue checking.
+                 */
                 append(
-                    "Result page timeout; moving safely to next route."
+                    "Result page not detected yet. Staying on current route."
                 )
 
-                nextRoute()
+                handler.postDelayed(
+                    {
+
+                        if(running){
+
+                            waitResult(0)
+                        }
+
+                    },
+                    2000
+                )
 
             } else {
 
                 handler.postDelayed(
                     {
-                        waitResult(
-                            elapsed + 1000
-                        )
+
+                        if(running){
+
+                            waitResult(
+                                elapsed + 1000
+                            )
+                        }
+
                     },
                     1000
                 )
@@ -1286,290 +1715,374 @@ class MainActivity : Activity() {
         }
     }
 
+    /*
+     * Analyze result page.
+     */
     private fun checkResult(
         elapsed: Int
     ) {
 
-        if (!running)
+        if(!running)
             return
 
-        val js = """
-        (function(){
+        val js =
+            """
+            (function(){
 
-          const normalize = s =>
-            (s || '')
-              .replace(/\s+/g,' ')
-              .trim();
+              function normalize(s){
 
-          const body =
-            normalize(
-              document.body?.innerText || ''
-            ).toUpperCase();
-
-          /*
-           * First check the actual ticket cards.
-           *
-           * Availability is determined ONLY from:
-           *
-           * Available Tickets(Counter + Online)
-           *
-           * and the number immediately following it.
-           */
-          const results = [];
-
-          const all =
-            [...document.querySelectorAll('*')];
-
-          const labels =
-            all.filter(
-              e =>
-                normalize(
-                  e.innerText ||
-                  ''
-                ) ===
-                'Available Tickets(Counter + Online)'
-            );
-
-          labels.forEach(label => {
-
-            const card =
-              label.closest(
-                '.single-seat-class'
-              );
-
-            const trip =
-              label.closest(
-                '.single-trip-wrapper'
-              );
-
-            if(!card)
-              return;
-
-            const cardLines =
-              (card.innerText || '')
-                .split(/\n+/)
-                .map(x => x.trim())
-                .filter(Boolean);
-
-            const labelIndex =
-              cardLines.findIndex(
-                x =>
-                  normalize(x) ===
-                  'Available Tickets(Counter + Online)'
-              );
-
-            if(
-              labelIndex < 0 ||
-              labelIndex + 1 >=
-              cardLines.length
-            )
-              return;
-
-            /*
-             * The number on the following line is the
-             * ONLY value used for availability.
-             */
-            const countText =
-              cardLines[
-                labelIndex + 1
-              ];
-
-            const match =
-              countText.match(/\d+/);
-
-            if(!match)
-              return;
-
-            const available =
-              parseInt(
-                match[0],
-                10
-              );
-
-            let train =
-              'UNKNOWN TRAIN';
-
-            if(trip){
-
-              const tripLines =
-                (trip.innerText || '')
-                  .split(/\n+/)
-                  .map(x => x.trim())
-                  .filter(Boolean);
-
-              if(tripLines.length)
-                train = tripLines[0];
-            }
-
-            let className =
-              'S_CHAIR';
-
-            /*
-             * Try to identify the seat class from the
-             * same ticket card.
-             */
-            for(
-              const line of cardLines
-            ){
-
-              const upper =
-                line.toUpperCase();
-
-              if(
-                upper.includes('S_CHAIR') ||
-                upper.includes('SHOVAN CHAIR')
-              ){
-
-                className = line;
-                break;
+                return (
+                  s || ''
+                )
+                .replace(
+                  /\s+/g,
+                  ' '
+                )
+                .trim();
               }
-            }
 
-            results.push({
-              train:train,
-              class_name:className,
-              available:available
-            });
+              const body =
+                normalize(
+                  document.body?.innerText ||
+                  ''
+                ).toUpperCase();
 
-          });
-
-          /*
-           * Positive result:
-           * only count > 0 is treated as available.
-           */
-          const positive =
-            results.filter(
-              x => x.available > 0
-            );
-
-          if(positive.length){
-
-            return JSON.stringify({
-              type:'AVAILABLE',
-              items:positive
-            });
-
-          }
-
-          /*
-           * If actual ticket cards exist and all their
-           * following-line counts are zero, this is
-           * definitely no ticket.
-           */
-          if(labels.length){
-
-            let validCount = 0;
-
-            labels.forEach(label => {
-
-              const card =
-                label.closest(
-                  '.single-seat-class'
-                );
-
-              if(!card)
-                return;
-
-              const lines =
-                (card.innerText || '')
-                  .split(/\n+/)
-                  .map(x => x.trim())
-                  .filter(Boolean);
-
-              const idx =
-                lines.findIndex(
-                  x =>
-                    normalize(x) ===
+              /*
+               * EXACT availability label.
+               */
+              const labels =
+                [
+                  ...document.querySelectorAll(
+                    '*'
+                  )
+                ].filter(
+                  e =>
+                    normalize(
+                      e.innerText ||
+                      ''
+                    ) ===
                     'Available Tickets(Counter + Online)'
                 );
 
-              if(
-                idx >= 0 &&
-                idx + 1 < lines.length
-              ){
+              const results = [];
 
-                const m =
-                  lines[
-                    idx + 1
-                  ].match(/\d+/);
+              labels.forEach(
+                label => {
 
-                if(m){
+                  /*
+                   * Actual ticket card.
+                   */
+                  const card =
+                    label.closest(
+                      '.single-seat-class'
+                    );
 
-                  validCount++;
+                  const trip =
+                    label.closest(
+                      '.single-trip-wrapper'
+                    );
 
-                  const n =
+                  if(!card)
+                    return;
+
+                  const lines =
+                    (
+                      card.innerText ||
+                      ''
+                    )
+                    .split(
+                      /\n+/
+                    )
+                    .map(
+                      x => x.trim()
+                    )
+                    .filter(
+                      Boolean
+                    );
+
+                  const index =
+                    lines.findIndex(
+                      x =>
+                        normalize(x) ===
+                        'Available Tickets(Counter + Online)'
+                    );
+
+                  if(
+                    index < 0 ||
+                    index + 1 >=
+                      lines.length
+                  )
+                    return;
+
+                  /*
+                   * THE NEXT LINE ONLY.
+                   */
+                  const nextLine =
+                    lines[
+                      index + 1
+                    ];
+
+                  const match =
+                    nextLine.match(
+                      /^\s*(\d+)\s*$/
+                    );
+
+                  if(!match)
+                    return;
+
+                  const available =
                     parseInt(
-                      m[0],
+                      match[1],
                       10
                     );
 
-                  if(n > 0){
-                    return;
+                  let train =
+                    'UNKNOWN TRAIN';
+
+                  if(trip){
+
+                    const tripLines =
+                      (
+                        trip.innerText ||
+                        ''
+                      )
+                      .split(
+                        /\n+/
+                      )
+                      .map(
+                        x => x.trim()
+                      )
+                      .filter(
+                        Boolean
+                      );
+
+                    if(
+                      tripLines.length
+                    ){
+
+                      train =
+                        tripLines[0];
+                    }
                   }
+
+                  let className =
+                    'S_CHAIR';
+
+                  for(
+                    const line of lines
+                  ){
+
+                    const upper =
+                      line.toUpperCase();
+
+                    if(
+                      upper.includes(
+                        'S_CHAIR'
+                      ) ||
+                      upper.includes(
+                        'SHOVAN CHAIR'
+                      )
+                    ){
+
+                      className =
+                        line;
+
+                      break;
+                    }
+                  }
+
+                  /*
+                   * Only actual positive counts
+                   * enter results.
+                   */
+                  if(
+                    available > 0
+                  ){
+
+                    results.push({
+
+                      train:train,
+
+                      class_name:
+                        className,
+
+                      available:
+                        available
+                    });
+                  }
+                });
+
+              /*
+               * POSITIVE RESULT.
+               */
+              if(
+                results.length > 0
+              ){
+
+                return JSON.stringify({
+
+                  type:
+                    'AVAILABLE',
+
+                  items:
+                    results
+
+                });
+              }
+
+              /*
+               * If exact availability labels exist
+               * and all their following-line counts
+               * are zero, NO TICKET.
+               */
+              if(
+                labels.length > 0
+              ){
+
+                let validZero =
+                  false;
+
+                labels.forEach(
+                  label => {
+
+                    const card =
+                      label.closest(
+                        '.single-seat-class'
+                      );
+
+                    if(!card)
+                      return;
+
+                    const lines =
+                      (
+                        card.innerText ||
+                        ''
+                      )
+                      .split(
+                        /\n+/
+                      )
+                      .map(
+                        x => x.trim()
+                      )
+                      .filter(
+                        Boolean
+                      );
+
+                    const index =
+                      lines.findIndex(
+                        x =>
+                          normalize(x) ===
+                          'Available Tickets(Counter + Online)'
+                      );
+
+                    if(
+                      index >= 0 &&
+                      index + 1 <
+                        lines.length
+                    ){
+
+                      const nextLine =
+                        lines[
+                          index + 1
+                        ];
+
+                      const match =
+                        nextLine.match(
+                          /^\s*(\d+)\s*$/
+                        );
+
+                      if(match){
+
+                        const n =
+                          parseInt(
+                            match[1],
+                            10
+                          );
+
+                        if(
+                          n === 0
+                        ){
+
+                          validZero =
+                            true;
+                        }
+                      }
+                    }
+                  }
+                );
+
+                if(validZero){
+
+                  return JSON.stringify({
+
+                    type:
+                      'NO_TICKET'
+                  });
                 }
               }
-            });
 
-            if(validCount > 0){
+              /*
+               * Explicit Railway no-ticket message.
+               */
+              if(
+                body.includes(
+                  'NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE'
+                )
+              ){
+
+                return JSON.stringify({
+
+                  type:
+                    'NO_TICKET'
+                });
+              }
+
+              /*
+               * Three visible Search buttons
+               * = NO TICKET.
+               */
+              const searchButtons =
+                [
+                  ...document.querySelectorAll(
+                    'button'
+                  )
+                ]
+                .filter(
+                  b =>
+                    normalize(
+                      b.innerText ||
+                      ''
+                    ) ===
+                      'Search' &&
+                    (
+                      b.offsetWidth ||
+                      b.offsetHeight ||
+                      b.getClientRects().length
+                    )
+                );
+
+              if(
+                searchButtons.length === 3
+              ){
+
+                return JSON.stringify({
+
+                  type:
+                    'NO_TICKET',
+
+                  searchButtons:
+                    3
+                });
+              }
 
               return JSON.stringify({
-                type:'NO_TICKET'
+
+                type:
+                  'WAIT'
               });
-            }
-          }
 
-          /*
-           * Explicit Railway no-ticket message.
-           */
-          if(
-            body.includes(
-              'NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE'
-            )
-          ){
-
-            return JSON.stringify({
-              type:'NO_TICKET'
-            });
-
-          }
-
-          /*
-           * Three Search buttons on a result page
-           * means NO TICKET.
-           */
-          const searchButtons =
-            [...document.querySelectorAll(
-              'button'
-            )]
-            .filter(
-              b =>
-                normalize(
-                  b.innerText ||
-                  ''
-                ) === 'Search' &&
-                (
-                  b.offsetWidth ||
-                  b.offsetHeight ||
-                  b.getClientRects().length
-                )
-            );
-
-          if(
-            searchButtons.length === 3
-          ){
-
-            return JSON.stringify({
-              type:'NO_TICKET',
-              searchButtons:3
-            });
-          }
-
-          return JSON.stringify({
-            type:'WAIT'
-          });
-
-        })()
-        """.trimIndent()
+            })()
+            """.trimIndent()
 
         eval(js) { raw ->
 
@@ -1584,24 +2097,32 @@ class MainActivity : Activity() {
                         )
 
                 val o =
-                    JSONObject(clean)
+                    JSONObject(
+                        clean
+                    )
 
                 when(
-                    o.optString("type")
+                    o.optString(
+                        "type"
+                    )
                 ){
 
                     "NO_TICKET" -> {
 
                         append(
-                            "No ticket: " +
-                                    routes[routeIndex].first +
+                            "✓ No ticket: " +
+                                    routes[
+                                        routeIndex
+                                    ].first +
                                     " → " +
-                                    routes[routeIndex].second
+                                    routes[
+                                        routeIndex
+                                    ].second
                         )
 
                         /*
-                         * Result page has already been
-                         * visible for at least 2 seconds.
+                         * Result page has already
+                         * had the mandatory pause.
                          */
                         continueAfterNoTicket()
                     }
@@ -1620,81 +2141,83 @@ class MainActivity : Activity() {
 
                     else -> {
 
-                        if(
-                            elapsed >= 90000
-                        ){
+                        /*
+                         * Unknown/incomplete result:
+                         * do NOT assume no ticket.
+                         */
+                        handler.postDelayed(
+                            {
 
-                            append(
-                                "Result data timeout; NOT treating empty page as no-ticket."
-                            )
-
-                            nextRoute()
-
-                        } else {
-
-                            handler.postDelayed(
-                                {
+                                if(running){
 
                                     checkResult(
                                         elapsed + 1000
                                     )
+                                }
 
-                                },
-                                1000
-                            )
-                        }
+                            },
+                            1000
+                        )
                     }
                 }
 
-            } catch(e: Exception) {
+            } catch(
+                e: Exception
+            ){
 
-                if(
-                    elapsed >= 90000
-                ){
+                handler.postDelayed(
+                    {
 
-                    append(
-                        "Result parsing timeout; moving safely to next route."
-                    )
-
-                    nextRoute()
-
-                } else {
-
-                    handler.postDelayed(
-                        {
+                        if(running){
 
                             checkResult(
                                 elapsed + 1000
                             )
+                        }
 
-                        },
-                        1000
-                    )
-                }
+                    },
+                    1000
+                )
             }
         }
     }
 
+    /*
+     * Positive ticket result.
+     */
     private fun handleAvailable(
         arr: JSONArray
     ) {
 
-        val (from, to) =
-            routes[routeIndex]
+        val (
+            from,
+            to
+        ) =
+            routes[
+                routeIndex
+            ]
 
         val sb =
             StringBuilder(
+
                 "🎫 BANGLADESH RAILWAY TICKET AVAILABLE\n\n" +
-                        "Route: $from → $to\n" +
-                        "Date: $targetDate\n\n"
+
+                "Route: $from → $to\n" +
+
+                "Date: $targetDate\n\n"
             )
+
+        var positiveCount =
+            0
 
         for(
             i in 0 until arr.length()
         ){
 
             val x =
-                arr.getJSONObject(i)
+                arr.getJSONObject(
+                    i
+                )
 
             val count =
                 x.optInt(
@@ -1702,103 +2225,128 @@ class MainActivity : Activity() {
                     0
                 )
 
-            /*
-             * Extra safety:
-             * Telegram is only prepared for count > 0.
-             */
-            if(count <= 0)
+            if(
+                count <= 0
+            )
                 continue
 
+            positiveCount++
+
             sb.append(
-                "🚆 ${x.optString("train")}\n"
+                "🚆 " +
+                        x.optString(
+                            "train"
+                        ) +
+                        "\n"
             )
 
             sb.append(
-                "💺 Class: ${
-                    x.optString(
-                        "class_name"
-                    )
-                }\n"
+                "💺 Class: " +
+                        x.optString(
+                            "class_name"
+                        ) +
+                        "\n"
             )
 
             sb.append(
-                "🎟 Tickets: $count\n\n"
+                "🎟 Tickets: " +
+                        count +
+                        "\n\n"
             )
         }
 
         /*
-         * Do not send anything if there is no
-         * actual positive count.
+         * Extra safety:
+         * no positive number = no Telegram.
          */
         if(
-            !sb.contains(
-                "🎟 Tickets:"
-            )
+            positiveCount == 0
         ){
+
+            append(
+                "No positive ticket count found. No Telegram sent."
+            )
 
             continueAfterNoTicket()
 
             return
         }
 
-        append(
+        val message =
             sb.toString()
+
+        append(
+            message
         )
 
+        /*
+         * Send Telegram, then continue from NEXT route.
+         */
         sendTelegram(
-            sb.toString()
+            message
         ) {
 
-            if(running){
+            if(!running)
+                return@sendTelegram
 
-                append(
-                    "Ticket handled. Going Home and continuing from the next route."
-                )
+            append(
+                "Ticket handled. Continuing from next route."
+            )
 
-                nextRoute()
-            }
+            nextRoute()
         }
     }
 
     /*
-     * Negative result handling.
+     * Handle NO TICKET.
      *
-     * Odd round  -> Search button #1
-     * Even round -> Search button #2
-     *
-     * The secondary Search button is used to go to
-     * the NEXT route without restarting the round.
+     * Odd round  -> Search #1
+     * Even round -> Search #2
      */
     private fun continueAfterNoTicket() {
 
-        if (!running)
+        if(!running)
             return
 
         /*
          * Route 6 completed.
-         * Do NOT use a secondary button for a non-existent
-         * route 7. Complete the six-route round first.
          */
-        if(routeIndex == 5){
+        if(
+            routeIndex == 5
+        ){
 
             finishSixRouteRound()
 
             return
         }
 
+        /*
+         * Next route.
+         */
         val next =
             routeIndex + 1
 
+        /*
+         * Odd = 1
+         * Even = 2
+         */
         val buttonNumber =
-            if(cycle % 2 == 1)
+            if(
+                cycle % 2 == 1
+            )
                 1
             else
                 2
 
-        routeIndex = next
+        routeIndex =
+            next
 
         append(
-            "No ticket confirmed. Using secondary Search button #$buttonNumber for next route."
+            "No ticket confirmed."
+        )
+
+        append(
+            "Using secondary Search button #$buttonNumber for next route."
         )
 
         clickSuggested(
@@ -1808,77 +2356,84 @@ class MainActivity : Activity() {
         )
     }
 
+    /*
+     * Click secondary Search button.
+     */
     private fun clickSuggested(
         buttonNumber: Int,
         nextIndex: Int,
         attempt: Int
     ) {
 
-        if (!running)
+        if(!running)
             return
 
-        if(attempt >= 30){
+        val js =
+            """
+            (function(){
 
-            append(
-                "Secondary Search button #$buttonNumber not available."
-            )
+              const bs =
+                [
+                  ...document.querySelectorAll(
+                    'button'
+                  )
+                ]
+                .filter(
+                  b =>
+                    (
+                      b.innerText ||
+                      ''
+                    ).trim() ===
+                      'Search' &&
 
-            /*
-             * Safety fallback: restart next route from Home.
-             */
-            runRoute(nextIndex)
+                    (
+                      b.offsetWidth ||
+                      b.offsetHeight ||
+                      b.getClientRects().length
+                    )
+                );
 
-            return
-        }
+              if(
+                bs.length >=
+                  $buttonNumber
+              ){
 
-        val js = """
-        (function(){
+                bs[
+                  ${buttonNumber - 1}
+                ].click();
 
-          const bs =
-            [...document.querySelectorAll(
-              'button'
-            )]
-            .filter(
-              b =>
-                (
-                  b.innerText ||
-                  ''
-                ).trim() === 'Search' &&
-                (
-                  b.offsetWidth ||
-                  b.offsetHeight ||
-                  b.getClientRects().length
-                )
-            );
+                return 'CLICKED';
+              }
 
-          if(
-            bs.length >= $buttonNumber
-          ){
+              return 'NO_BUTTON';
 
-            bs[
-              ${buttonNumber - 1}
-            ].click();
-
-            return 'CLICKED';
-          }
-
-          return 'NO_BUTTON';
-
-        })()
-        """.trimIndent()
+            })()
+            """.trimIndent()
 
         eval(js) { result ->
 
             val clean =
                 result.trim('"')
 
-            if(clean == "CLICKED"){
+            if(
+                clean ==
+                    "CLICKED"
+            ){
 
-                val (from, to) =
-                    routes[nextIndex]
+                val (
+                    from,
+                    to
+                ) =
+                    routes[
+                        nextIndex
+                    ]
 
                 append(
-                    "Secondary Search #$buttonNumber clicked for $from → $to."
+                    "✓ Secondary Search #$buttonNumber clicked."
+                )
+
+                append(
+                    "Next route: $from → $to"
                 )
 
                 setStatus(
@@ -1886,15 +2441,15 @@ class MainActivity : Activity() {
                 )
 
                 /*
-                 * The secondary Search opens another result page.
-                 * waitResult() will again enforce the 2-second
-                 * result-page pause.
+                 * Secondary Search produces a result page.
                  */
                 handler.postDelayed(
                     {
 
-                        if(running)
+                        if(running){
+
                             waitResult(0)
+                        }
 
                     },
                     500
@@ -1902,14 +2457,32 @@ class MainActivity : Activity() {
 
             } else {
 
+                /*
+                 * Do NOT change route.
+                 *
+                 * Keep trying the same secondary
+                 * Search button.
+                 */
+                if(
+                    attempt % 10 == 0
+                ){
+
+                    append(
+                        "Waiting for secondary Search #$buttonNumber..."
+                    )
+                }
+
                 handler.postDelayed(
                     {
 
-                        clickSuggested(
-                            buttonNumber,
-                            nextIndex,
-                            attempt + 1
-                        )
+                        if(running){
+
+                            clickSuggested(
+                                buttonNumber,
+                                nextIndex,
+                                attempt + 1
+                            )
+                        }
 
                     },
                     500
@@ -1919,23 +2492,22 @@ class MainActivity : Activity() {
     }
 
     /*
-     * Finish exactly six routes.
+     * Six routes completed.
      *
-     * Odd round:
-     *     13-second break
+     * Odd  -> 13 seconds
+     * Even -> 14 seconds
      *
-     * Even round:
-     *     14-second break
-     *
-     * Then always start the next round from a fresh Home page.
+     * Then fresh Home -> Route 1.
      */
     private fun finishSixRouteRound() {
 
-        if (!running)
+        if(!running)
             return
 
         val breakTime =
-            if(cycle % 2 == 1)
+            if(
+                cycle % 2 == 1
+            )
                 13000L
             else
                 14000L
@@ -1944,12 +2516,20 @@ class MainActivity : Activity() {
             "=== ROUND $cycle COMPLETED: FIRST 6 ROUTES ==="
         )
 
-        append(
-            if(cycle % 2 == 1)
+        if(
+            cycle % 2 == 1
+        ){
+
+            append(
                 "Odd round: 13-second break..."
-            else
+            )
+
+        } else {
+
+            append(
                 "Even round: 14-second break..."
-        )
+            )
+        }
 
         setStatus(
             "Round $cycle complete"
@@ -1963,29 +2543,33 @@ class MainActivity : Activity() {
 
                 cycle++
 
+                routeIndex = 0
+
                 append(
                     "=== ROUND $cycle STARTED ==="
                 )
 
-                if(cycle % 2 == 1){
+                if(
+                    cycle % 2 == 1
+                ){
 
                     append(
-                        "Odd round: secondary Search #1 will be used."
+                        "Odd round → secondary Search #1"
                     )
 
                 } else {
 
                     append(
-                        "Even round: secondary Search #2 will be used."
+                        "Even round → secondary Search #2"
                     )
                 }
 
                 /*
                  * IMPORTANT:
-                 * Every new round starts from fresh Home.
+                 *
+                 * New round always starts
+                 * from a fresh Home page.
                  */
-                routeIndex = 0
-
                 runRoute(0)
 
             },
@@ -1994,18 +2578,21 @@ class MainActivity : Activity() {
     }
 
     /*
-     * Move to the next route after a positive ticket result
-     * or another safe completion.
+     * Move to NEXT route after positive result.
      *
-     * If route 6 was the last route, complete the round.
-     * Otherwise restart that NEXT route from fresh Home.
+     * Route 6 → finish round.
+     *
+     * Otherwise:
+     * next route starts from fresh Home.
      */
     private fun nextRoute() {
 
-        if (!running)
+        if(!running)
             return
 
-        if(routeIndex >= 5){
+        if(
+            routeIndex >= 5
+        ){
 
             finishSixRouteRound()
 
@@ -2018,18 +2605,25 @@ class MainActivity : Activity() {
         handler.postDelayed(
             {
 
-                if(running)
-                    runRoute(next)
+                if(running){
+
+                    runRoute(
+                        next
+                    )
+                }
 
             },
             500
         )
     }
 
+    /*
+     * Telegram sender.
+     */
     private fun sendTelegram(
         message: String,
         onDone: () -> Unit
-    ){
+    ) {
 
         val token =
             tokenEdit.text
@@ -2051,6 +2645,7 @@ class MainActivity : Activity() {
             )
 
             handler.post {
+
                 onDone()
             }
 
@@ -2063,7 +2658,9 @@ class MainActivity : Activity() {
 
                 val url =
                     URL(
-                        "https://api.telegram.org/bot$token/sendMessage"
+                        "https://api.telegram.org/bot" +
+                                token +
+                                "/sendMessage"
                     )
 
                 val c =
@@ -2073,7 +2670,8 @@ class MainActivity : Activity() {
                 c.requestMethod =
                     "POST"
 
-                c.doOutput = true
+                c.doOutput =
+                    true
 
                 c.connectTimeout =
                     15000
@@ -2110,17 +2708,25 @@ class MainActivity : Activity() {
 
                 handler.post {
 
-                    append(
-                        if(ok)
+                    if(ok){
+
+                        append(
                             "✓ Telegram notification sent."
-                        else
+                        )
+
+                    } else {
+
+                        append(
                             "✗ Telegram HTTP $response"
-                    )
+                        )
+                    }
 
                     onDone()
                 }
 
-            } catch(e: Exception){
+            } catch(
+                e: Exception
+            ){
 
                 handler.post {
 
@@ -2134,10 +2740,13 @@ class MainActivity : Activity() {
         }
     }
 
+    /*
+     * Evaluate JavaScript inside WebView.
+     */
     private fun eval(
         js: String,
         cb: (String) -> Unit
-    ){
+    ) {
 
         web.evaluateJavascript(
             js
@@ -2149,32 +2758,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun toIso(
-        s: String
-    ): String = try {
-
-        SimpleDateFormat(
-            "dd-MM-yyyy",
-            Locale.US
-        )
-            .parse(s)
-            ?.let {
-
-                SimpleDateFormat(
-                    "yyyy-MM-dd",
-                    Locale.US
-                ).format(it)
-
-            } ?: s
-
-    } catch(_: Exception){
-
-        s
-    }
-
+    /*
+     * Append log.
+     */
     private fun append(
         s: String
-    ){
+    ) {
 
         runOnUiThread {
 
@@ -2185,15 +2774,18 @@ class MainActivity : Activity() {
             (
                 log.parent as?
                     ScrollView
-                )?.fullScroll(
-                    View.FOCUS_DOWN
-                )
+            )?.fullScroll(
+                View.FOCUS_DOWN
+            )
         }
     }
 
+    /*
+     * Status.
+     */
     private fun setStatus(
         s: String
-    ){
+    ) {
 
         runOnUiThread {
 
