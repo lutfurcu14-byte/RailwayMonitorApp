@@ -561,7 +561,7 @@ class MainActivity : Activity() {
         val message = sb.toString()
         append(message)
         
-        // Send telegram and wait for confirmation before moving to the next step
+        // Telegram sending is strictly guaranteed before progressing
         sendTelegram(message) {
             if (!running) return@sendTelegram
             moveToNextRouteOrGroup(true)
@@ -575,7 +575,7 @@ class MainActivity : Activity() {
 
         if (routeIndex < routes.size) {
             if (ticketFound) {
-                append("Starting next route from Home Page...")
+                append("Ticket processed. Starting next route from Home Page...")
                 runCurrentRoute(true)
             } else {
                 val nextFrom = routes[routeIndex].first
@@ -618,7 +618,7 @@ class MainActivity : Activity() {
                 const targetFrom = '${from.uppercase()}';
                 const targetTo = '${to.uppercase()}';
                 
-                // রেজাল্ট পেজের রুট কার্ড বা অল্টারনেট অপশনগুলো খুঁজে দেখা
+                // রেজাল্ট পেজের অল্টারনেট রুট অপشن বা সার্চ বাটন খুঁজে বের করা
                 const elements = [ ...document.querySelectorAll( 'div, span, button, a' ) ];
                 const targetEl = elements.find( e => {
                     const txt = (e.innerText || '').toUpperCase();
@@ -626,12 +626,14 @@ class MainActivity : Activity() {
                 });
                 
                 if( targetEl ){
-                    // কার্ডের ভেতরের বা আশপাশের 'Search' বাটন খোঁজা
-                    let container = targetEl.closest( '.single-trip-wrapper, .card, div' ) || targetEl;
+                    let container = targetEl.closest( '.single-trip-wrapper, .card, div, li' ) || targetEl;
                     const btn = [ ...container.querySelectorAll( 'button, a' ) ].find( b => {
                         const t = (b.innerText || '').toUpperCase();
                         return t.includes('SEARCH') || t.includes('SELECT');
-                    }) || targetEl;
+                    }) || [ ...document.querySelectorAll('button, a') ].find( b => {
+                        const t = (b.innerText || '').toUpperCase();
+                        return t.includes('SEARCH') && t.includes(targetFrom);
+                    });
                     
                     if( btn && typeof btn.click === 'function' ){
                         btn.click();
@@ -648,11 +650,11 @@ class MainActivity : Activity() {
                 append("✓ Alternate route clicked ($from -> $to). Waiting for new result...")
                 handler.postDelayed({ if (running) checkResult(0) }, 3000)
             } else {
-                if (attempt > 10) {
-                    append("Alternate route button not found. Falling back to Home page...")
+                if (attempt > 6) {
+                    append("Alternate route button not found on page. Loading from Home...")
                     runCurrentRoute(true)
                 } else {
-                    handler.postDelayed({ if (running) clickAlternateRoute(from, to, attempt + 1) }, 600)
+                    handler.postDelayed({ if (running) clickAlternateRoute(from, to, attempt + 1) }, 800)
                 }
             }
         }
@@ -682,8 +684,8 @@ class MainActivity : Activity() {
                 val ok = response in 200..299
                 c.disconnect()
                 handler.post {
-                    if (ok) append("✓ Telegram notification sent.")
-                    else append("✗ Telegram HTTP $response")
+                    if (ok) append("✓ Telegram notification sent successfully.")
+                    else append("✗ Telegram HTTP error: $response")
                     onDone()
                 }
             } catch (e: Exception) {
