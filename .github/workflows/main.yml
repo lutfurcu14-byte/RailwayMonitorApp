@@ -23,8 +23,9 @@ jobs:
 
       - name: Accept licenses & install SDK packages
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | $SDKMANAGER --licenses || true
+          $SDKMANAGER "platform-tools" "platforms;android-35" "build-tools;35.0.0"
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
