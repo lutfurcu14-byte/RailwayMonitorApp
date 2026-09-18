@@ -41,6 +41,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())
 
+        val root = window.decorView.findViewById<android.view.View>(android.R.id.content)
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            view.setPadding(view.paddingLeft, bars.top + 32, view.paddingRight, view.paddingBottom)
+            insets
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -88,6 +95,12 @@ class MainActivity : ComponentActivity() {
             hint = "প্রতি সাইকেলের মাঝে বিরতি (সেকেন্ড), যেমন: 30"
         }
 
+        val loginBtn = Button(this).apply {
+            text = "লগইন করুন (প্রথমবার / সেশন শেষ হয়ে গেলে)"
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, LoginActivity::class.java))
+            }
+        }
         val startBtn = Button(this).apply {
             text = "মনিটরিং শুরু করুন"
             setOnClickListener { startMonitoring() }
@@ -109,6 +122,7 @@ class MainActivity : ComponentActivity() {
         root.addView(tokenInput)
         root.addView(chatIdInput)
         root.addView(intervalInput)
+        root.addView(loginBtn)
         root.addView(startBtn)
         root.addView(stopBtn)
         root.addView(
