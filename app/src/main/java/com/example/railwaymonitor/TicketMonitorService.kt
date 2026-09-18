@@ -56,19 +56,17 @@ class TicketMonitorService : Service() {
         const val TRAIN_CLASS = "S_CHAIR"
         const val NO_TICKET_MARKER = "NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE"
 
-        val ROUTES = listOf(
-            "Sylhet" to "Dhaka",
-            "Maijgaon" to "Dhaka",
-            "Kulaura" to "Dhaka",
-            "Shamshernagar" to "Dhaka",
-            "Sreemangal" to "Dhaka",
-            "Shaistaganj" to "Dhaka",
-            "Sylhet" to "Biman_Bandar",
-            "Maijgaon" to "Biman_Bandar",
-            "Kulaura" to "Biman_Bandar",
-            "Shamshernagar" to "Biman_Bandar",
-            "Sreemangal" to "Biman_Bandar",
-            "Shaistaganj" to "Biman_Bandar"
+        data class RouteGroup(val to: String, val froms: List<String>)
+
+        val ROUTE_GROUPS = listOf(
+            RouteGroup(
+                "Dhaka",
+                listOf("Sylhet", "Maijgaon", "Kulaura", "Shamshernagar", "Sreemangal", "Shaistaganj")
+            ),
+            RouteGroup(
+                "Biman_Bandar",
+                listOf("Sylhet", "Maijgaon", "Kulaura", "Shamshernagar", "Sreemangal", "Shaistaganj")
+            )
         )
     }
 
@@ -119,23 +117,33 @@ class TicketMonitorService : Service() {
         if (monitorJob?.isActive == true) return
         setupWebView()
         monitorJob = serviceScope.launch {
-            log("মনিটরিং শুরু হলো | তারিখ: $targetDate | ${ROUTES.size} রুট")
+            val totalRoutes = ROUTE_GROUPS.sumOf { it.froms.size }
+            log("মনিটরিং শুরু হলো | তারিখ: $targetDate | $totalRoutes রুট (${ROUTE_GROUPS.size} গ্রুপে)")
             var cycle = 0
             while (isActive) {
                 cycle++
                 log("===== CYCLE #$cycle শুরু =====")
-                for ((index, route) in ROUTES.withIndex()) {
-                    if (!isActive) break
-                    val (from, to) = route
-                    updateStatus("[$cycle] ${index + 1}/${ROUTES.size}: $from → $to")
-                    try {
-                        checkOneRoute(from, to)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        log("✗ রুট এরর ($from→$to): ${e.message}")
+                var routeCounter = 0
+                for (group in ROUTE_GROUPS) {
+                    var lastWasNoTicket = false
+                    for ((i, from) in group.froms.withIndex()) {
+                        if (!isActive) break
+                        routeCounter++
+                        updateStatus("[$cycle] $routeCounter/$totalRoutes: $from → ${group.to}")
+                        try {
+                            lastWasNoTicket = if (i == 0 || !lastWasNoTicket) {
+                                checkRouteFull(from, group.to)
+                            } else {
+                                checkRouteQuick(from, group.to)
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            log("✗ রুট এরর ($from→${group.to}): ${e.message}")
+                            lastWasNoTicket = false
+                        }
+                        delay(1500)
                     }
-                    delay(2500) // routes-এর মাঝে ছোট বিরতি, সাইটকে বেশি চাপ না দিতে
                 }
                 log("===== CYCLE #$cycle শেষ, ${intervalSec}s পর আবার শুরু =====")
                 delay(intervalSec * 1000L)
@@ -209,62 +217,148 @@ class TicketMonitorService : Service() {
     // check_ticket_availability from the python script)
     // ------------------------------------------------------------
 
-    private suspend fun checkOneRoute(fromCity: String, toCity: String) {
-        log("\n--- রুট: $fromCity → $toCity ---")
+    /** পূর্ণ সেটআপ: হোমপেজ লোড, from/to city, তারিখ, ক্লাস, সার্চ ক্লিক।
+     *  রিটার্ন করে true যদি ফলাফল "NO_TICKET" হয় (তাহলে caller পরের রুটে
+     *  দ্রুত-জাম্প ব্যবহার করতে পারবে)। */
+    private suspend fun checkRouteFull(fromCity: String, toCity: String): Boolean {
+        log("\n--- রুট (পূর্ণ): $fromCity → $toCity ---")
         loadHome()
 
-        // 1) "I AGREE" ডিসক্লেইমার থাকলে ক্লিক করো
         runJs(JS.clickTextButton("I AGREE"))
         runJs(JS.clickTextButton("I Agree"))
         delay(500)
 
-        // 2) From / To সিটি সিলেক্ট
         selectCity("fromcity", fromCity)
         selectCity("tocity", toCity)
 
-        // 3) তারিখ (Angular ফর্ম-কন্ট্রোল সরাসরি ফোর্স-সিঙ্ক)
-        val isoDate = ddmmyyyyToIso(targetDate)
-        runJs(JS.forceSyncDate(isoDate))
+        setJourneyDate(targetDate)
         delay(400)
 
-        // 4) ক্লাস সিলেক্ট (S_CHAIR)
         runJs(JS.selectClass(TRAIN_CLASS))
         delay(600)
 
-        // 5) খালি জায়গায় ক্লিক করে ফোকাস সরানো + ডেটপিকার বন্ধ করা
         runJs("document.body.click(); document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));")
         delay(700)
 
-        // ফর্ম ভ্যালিডেশন শেষ হওয়া পর্যন্ত অপেক্ষা করে সার্চ বাটনে ক্লিক
         val searchClicked = waitAndClickSearch()
         if (!searchClicked) {
             log("✗ সার্চ বাটন রেডি হয়নি, এই রুট স্কিপ করা হলো।")
-            return
+            return false
         }
 
-        // 6) রেজাল্ট পেজ ওয়েট করা
-        val resultState = waitForResult()
-        if (resultState == ResultState.NO_TICKET) {
-            log("✗ কোনো টিকেট নেই: $fromCity → $toCity")
-            return
-        }
-        if (resultState == ResultState.TIMEOUT) {
-            log("⚠ রেজাল্ট পেজ টাইমআউট: $fromCity → $toCity")
-            return
+        return handleResultPage(fromCity, toCity, isFreshNavigation = true)
+    }
+
+    /** দ্রুত-জাম্প: "no ticket" সাজেশন বক্সের ১ম Search বাটনে ক্লিক করে সরাসরি
+     *  পরের (একই destination-এর) রুটে যাওয়া — হোমপেজে ফিরে ফর্ম না ভরেই। */
+    private suspend fun checkRouteQuick(fromCity: String, toCity: String): Boolean {
+        log("\n--- রুট (দ্রুত): $fromCity → $toCity ---")
+        val before = runJs(JS.getBodyText())
+        val clickRes = runJs(JS.clickSuggestedSearch(1))
+        if (!clickRes.contains("\"ok\":true")) {
+            log("⚠ দ্রুত-জাম্প বাটন পাওয়া যায়নি, পূর্ণ পদ্ধতিতে চেষ্টা করা হচ্ছে।")
+            return checkRouteFull(fromCity, toCity)
         }
 
-        // 7) টিকেট এভেইলেবিলিটি পার্স করা
+        val deadline = System.currentTimeMillis() + 15_000
+        var changed = false
+        while (System.currentTimeMillis() < deadline) {
+            delay(600)
+            val now = runJs(JS.getBodyText())
+            if (now != before) {
+                changed = true
+                break
+            }
+        }
+        if (!changed) log("⚠ পেজ বদলাচ্ছে বলে মনে হচ্ছে না, তবু এগিয়ে যাচ্ছি।")
+
+        return handleResultPage(fromCity, toCity, isFreshNavigation = false)
+    }
+
+    /** রেজাল্ট পেজ থেকে "no ticket" মার্কার / টিকেট এভেইলেবিলিটি চেক করে
+     *  দরকার হলে Telegram + Android নোটিফিকেশন পাঠানো — Full ও Quick দুই
+     *  পথের জন্যই কমন লজিক। রিটার্ন করে true হলে "NO_TICKET"। */
+    private suspend fun handleResultPage(fromCity: String, toCity: String, isFreshNavigation: Boolean): Boolean {
+        if (isFreshNavigation) {
+            val resultState = waitForResult()
+            if (resultState == ResultState.NO_TICKET) {
+                log("✗ কোনো টিকেট নেই: $fromCity → $toCity")
+                return true
+            }
+            if (resultState == ResultState.TIMEOUT) {
+                log("⚠ রেজাল্ট পেজ টাইমআউট: $fromCity → $toCity")
+                return false
+            }
+        } else {
+            delay(1500)
+            val noTicket = runJs(JS.checkNoTicketMarker())
+            if (noTicket.trim() == "true") {
+                log("✗ কোনো টিকেট নেই: $fromCity → $toCity")
+                return true
+            }
+        }
+
         delay(5000)
         val availability = fetchAvailability()
         if (availability.isNullOrEmpty()) {
             log("✗ কোনো টিকেট পাওয়া যায়নি: $fromCity → $toCity")
-            return
+            return false
         }
 
         log("🎫 টিকেট পাওয়া গেছে! $fromCity → $toCity (${availability.size} ক্লাস)")
         val message = buildTelegramMessage(fromCity, toCity, availability)
         sendTelegram(message)
         showAlertNotification(fromCity, toCity, message)
+        return false
+    }
+
+    private suspend fun setJourneyDate(ddmmyyyy: String) {
+        val parts = ddmmyyyy.split("-")
+        if (parts.size != 3) {
+            log("⚠ তারিখের ফরম্যাট ভুল, DD-MM-YYYY হতে হবে: $ddmmyyyy")
+            return
+        }
+        val targetDay = parts[0].toIntOrNull() ?: return
+        val targetMonthIndex = (parts[1].toIntOrNull() ?: return) - 1
+        val targetYear = parts[2].toIntOrNull() ?: return
+        val monthNames = listOf(
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        )
+        val targetMonthName = monthNames.getOrNull(targetMonthIndex) ?: return
+
+        val openRes = runJs(JS.openDatePicker())
+        if (!openRes.contains("\"ok\":true")) {
+            log("⚠ ক্যালেন্ডার খুলতে পারিনি (input পাওয়া যায়নি)")
+            return
+        }
+        delay(600)
+
+        var attempts = 0
+        while (attempts < 24) {
+            val headerRaw = runJs(JS.readCalendarHeader())
+            val month = Regex("\"month\":\"([^\"]*)\"").find(headerRaw)?.groupValues?.get(1)
+            val year = Regex("\"year\":\"([^\"]*)\"").find(headerRaw)?.groupValues?.get(1)?.toIntOrNull()
+            if (month == targetMonthName && year == targetYear) break
+            if (month == null || year == null) {
+                log("⚠ ক্যালেন্ডার হেডার পড়া যায়নি")
+                break
+            }
+            val currentIndex = monthNames.indexOf(month) + year * 12
+            val targetIndex = targetMonthIndex + targetYear * 12
+            val direction = if (targetIndex > currentIndex) "next" else "previous"
+            runJs(JS.clickCalendarArrow(direction))
+            delay(350)
+            attempts++
+        }
+
+        val dayRes = runJs(JS.clickCalendarDay(targetDay))
+        delay(500)
+        if (!dayRes.contains("\"ok\":true")) {
+            log("⚠ ক্যালেন্ডারে দিন ($targetDay) ক্লিক করতে পারিনি")
+        }
+        val finalVal = runJs(JS.getDateInputValue())
+        log("তারিখ ইনপুটের মান এখন: $finalVal")
     }
 
     private suspend fun selectCity(controlName: String, city: String) {
