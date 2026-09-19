@@ -109,48 +109,72 @@ object JS {
         })();
     """.trimIndent()
 
-    // পাইথন স্ক্রিপ্টের check_ticket_availability() JS ব্লকের সরাসরি পোর্ট।
+    // পুরনো ভার্সনে .available-text / .single-seat-class ইত্যাদি নির্দিষ্ট
+    // CSS ক্লাস নামের উপর নির্ভর করা হতো, যেগুলো যাচাই করা যায়নি (সাইট
+    // ব্লক করা)। এখন এর বদলে সরাসরি স্ক্রিনশটে-দেখা সবুজ "BOOK NOW" বাটন
+    // (enabled অবস্থায়) খোঁজা হচ্ছে — এটা অনেক বেশি নির্ভরযোগ্য, কারণ এটা
+    // চোখে দেখে নিশ্চিত করা প্যাটার্ন।
     fun checkAvailability(): String = """
         (function(){
-            var output = [];
-            var labels = Array.prototype.slice.call(document.querySelectorAll('.available-text'));
-            labels.forEach(function(label){
-                var card = label.closest('.single-seat-class');
-                var trip = label.closest('.single-trip-wrapper');
-                if (!card || !trip) return;
+            var buttons = Array.prototype.slice.call(document.querySelectorAll('button'));
+            var found = [];
+            for (var i=0;i<buttons.length;i++){
+                var btn = buttons[i];
+                var text = (btn.textContent||'').trim().toUpperCase();
+                if (text.indexOf('BOOK NOW') === -1) continue;
+                var rect = btn.getBoundingClientRect();
+                if (rect.width<=0 || rect.height<=0) continue;
+                var disabled = btn.disabled === true || btn.getAttribute('aria-disabled')==='true'
+                    || (btn.className||'').toString().toLowerCase().indexOf('disabled')>=0;
+                if (disabled) continue;
 
-                var tripLines = trip.innerText.split(/\n+/).map(function(x){return x.trim();}).filter(Boolean);
-                var trainName = tripLines.length ? tripLines[0] : 'UNKNOWN TRAIN';
+                var card = btn.closest('.single-seat-class') || btn.parentElement || btn;
+                var trip = btn.closest('.single-trip-wrapper') || card;
 
-                var cardLines = card.innerText.split(/\n+/).map(function(x){return x.trim();}).filter(Boolean);
-                if (!cardLines.length) return;
-                var className = cardLines[0];
-
-                var labelLines = label.innerText.split(/\n+/).map(function(x){return x.trim();}).filter(Boolean);
+                var className = 'UNKNOWN';
                 var available = 0;
-                if (labelLines.length > 0) {
-                    var n = parseInt(labelLines[labelLines.length - 1], 10);
-                    if (!isNaN(n)) available = n;
+                if (card) {
+                    var cardLines = (card.innerText||'').split(/\\n+/).map(function(x){return x.trim();}).filter(Boolean);
+                    if (cardLines.length) className = cardLines[0];
+                    var availMatch = (card.innerText||'').match(/Available[^0-9]*(\\d+)/i);
+                    if (availMatch) available = parseInt(availMatch[1],10) || 0;
                 }
 
-                var buttons = Array.prototype.slice.call(card.querySelectorAll('button'));
-                var bookNowEnabled = buttons.some(function(button){
-                    return button.innerText.trim().toUpperCase().indexOf('BOOK NOW') >= 0
-                        && !button.disabled
-                        && button.offsetParent !== null;
-                });
+                var trainName = 'UNKNOWN TRAIN';
+                if (trip) {
+                    var tripLines = (trip.innerText||'').split(/\\n+/).map(function(x){return x.trim();}).filter(Boolean);
+                    if (tripLines.length) trainName = tripLines[0];
+                }
 
-                var availableByClass = card.classList.contains('seat-available-wrap');
-
-                output.push({
+                found.push({
                     train: trainName,
                     class_name: className,
                     available: available,
-                    book_now_enabled: bookNowEnabled,
-                    available_by_class: availableByClass
+                    book_now_enabled: true,
+                    available_by_class: true
                 });
-            });
-            return JSON.stringify(output);
+            }
+            return JSON.stringify(found);
+        })();
+    """.trimIndent()
+
+    // ডিবাগ: পেজে মোট কতটা "BOOK NOW" বাটন আছে আর কতটা সক্রিয় — লগে দেখানোর
+    // জন্য, যাতে ভবিষ্যতে কোনো মিস হলে বোঝা যায় বাটনই খুঁজে পায়নি, নাকি
+    // খুঁজে পেয়েও ভুল বিচার করেছে।
+    fun debugBookNowCount(): String = """
+        (function(){
+            var buttons = Array.prototype.slice.call(document.querySelectorAll('button'));
+            var total = 0, enabled = 0;
+            for (var i=0;i<buttons.length;i++){
+                var btn = buttons[i];
+                var text = (btn.textContent||'').trim().toUpperCase();
+                if (text.indexOf('BOOK NOW') === -1) continue;
+                total++;
+                var rect = btn.getBoundingClientRect();
+                var disabled = btn.disabled === true || btn.getAttribute('aria-disabled')==='true';
+                if (rect.width>0 && rect.height>0 && !disabled) enabled++;
+            }
+            return JSON.stringify({total:total, enabled:enabled});
         })();
     """.trimIndent()
 
