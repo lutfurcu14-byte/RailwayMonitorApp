@@ -184,12 +184,48 @@ object JS {
 
     fun openDatePicker(): String = """
         (function(){
+            // প্রথমে চেষ্টা: সত্যিকারের <input placeholder="Pick a date">
             var input = document.querySelector('input[placeholder="Pick a date"]')
                 || document.querySelector('input[placeholder*="date" i]');
-            if (!input) return JSON.stringify({ok:false, reason:'input_not_found'});
-            input.click();
-            input.dispatchEvent(new Event('focus', {bubbles:true}));
-            return JSON.stringify({ok:true});
+            if (input) {
+                input.click();
+                input.dispatchEvent(new Event('focus', {bubbles:true}));
+                return JSON.stringify({ok:true, via:'input'});
+            }
+
+            // ফলব্যাক: এটা হয়তো <input> না, বরং কোনো button/div/span যাতে
+            // "Pick a date" লেখা টেক্সট আছে (অনেক ডেটপিকার লাইব্রেরি এভাবেই
+            // ট্রিগার এলিমেন্ট বানায়)
+            var xp = "//*[contains(normalize-space(text()),'Pick a date')]";
+            var r = document.evaluate(xp, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (var i=0;i<r.snapshotLength;i++){
+                var el = r.snapshotItem(i);
+                var rect = el.getBoundingClientRect();
+                if (rect.width>0 && rect.height>0){
+                    el.click();
+                    return JSON.stringify({ok:true, via:'text-element'});
+                }
+            }
+
+            // আরেকটা ফলব্যাক: "Date of Journey" লেবেলের ঠিক পরের ইনপুট/বক্স
+            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
+            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            var label = lr.singleNodeValue;
+            if (label) {
+                var container = label.parentElement;
+                if (container) {
+                    var clickable = container.querySelector('input, button, div[role], [tabindex]');
+                    if (clickable) {
+                        var rect2 = clickable.getBoundingClientRect();
+                        if (rect2.width>0 && rect2.height>0) {
+                            clickable.click();
+                            return JSON.stringify({ok:true, via:'near-label'});
+                        }
+                    }
+                }
+            }
+
+            return JSON.stringify({ok:false, reason:'input_not_found'});
         })();
     """.trimIndent()
 
@@ -287,7 +323,16 @@ object JS {
         (function(){
             var input = document.querySelector('input[placeholder="Pick a date"]')
                 || document.querySelector('input[placeholder*="date" i]');
-            return input ? (input.value || '') : '';
+            if (input) return input.value || '';
+
+            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
+            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            var label = lr.singleNodeValue;
+            if (label && label.parentElement) {
+                var t = (label.parentElement.innerText||'').replace('Date of Journey','').trim();
+                return t;
+            }
+            return '';
         })();
     """.trimIndent()
 }
