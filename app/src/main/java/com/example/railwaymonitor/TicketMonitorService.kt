@@ -68,6 +68,14 @@ class TicketMonitorService : Service() {
                 listOf("Sylhet", "Maijgaon", "Kulaura", "Shamshernagar", "Sreemangal", "Shaistaganj")
             )
         )
+
+        // অ্যাপ বন্ধ/মিনিমাইজ থাকা অবস্থাতেও যা যা ঘটেছে তা মনে রাখার জন্য —
+        // MainActivity খোলার সাথে সাথে পুরো ইতিহাস দেখাতে পারবে।
+        private const val MAX_LOG_LINES = 400
+        private val logBuffer = java.util.Collections.synchronizedList(mutableListOf<String>())
+        private val timeFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+
+        fun getLogSnapshot(): List<String> = synchronized(logBuffer) { logBuffer.toList() }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -275,13 +283,26 @@ class TicketMonitorService : Service() {
         return handleResultPage(fromCity, toCity, isFreshNavigation = false)
     }
 
+    /** মার্কার টেক্সট পেলেও একবার নিশ্চিত হওয়া — যদি আসলে কোনো সক্রিয়
+     *  "BOOK NOW" বাটন থেকে থাকে, তাহলে ভুল করে "টিকেট নেই" ধরে না নিয়ে
+     *  availability পার্সিংয়ে এগিয়ে যাওয়া (নিরাপত্তামূলক ডাবল-চেক)। */
+    private suspend fun confirmActuallyNoTicket(): Boolean {
+        val debugRaw = runJs(JS.debugBookNowCount())
+        val enabled = Regex("\"enabled\":(\\d+)").find(debugRaw)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        if (enabled > 0) {
+            log("⚠ 'no ticket' মার্কার দেখা গেলেও $enabled টা সক্রিয় BOOK NOW বাটন পাওয়া গেছে — availability চেক করা হচ্ছে")
+            return false
+        }
+        return true
+    }
+
     /** রেজাল্ট পেজ থেকে "no ticket" মার্কার / টিকেট এভেইলেবিলিটি চেক করে
      *  দরকার হলে Telegram + Android নোটিফিকেশন পাঠানো — Full ও Quick দুই
      *  পথের জন্যই কমন লজিক। রিটার্ন করে true হলে "NO_TICKET"। */
     private suspend fun handleResultPage(fromCity: String, toCity: String, isFreshNavigation: Boolean): Boolean {
         if (isFreshNavigation) {
             val resultState = waitForResult()
-            if (resultState == ResultState.NO_TICKET) {
+            if (resultState == ResultState.NO_TICKET && confirmActuallyNoTicket()) {
                 log("✗ কোনো টিকেট নেই: $fromCity → $toCity")
                 return true
             }
@@ -292,13 +313,15 @@ class TicketMonitorService : Service() {
         } else {
             delay(1500)
             val noTicket = runJs(JS.checkNoTicketMarker())
-            if (noTicket.trim() == "true") {
+            if (noTicket.trim() == "true" && confirmActuallyNoTicket()) {
                 log("✗ কোনো টিকেট নেই: $fromCity → $toCity")
                 return true
             }
         }
 
         delay(5000)
+        val debugRaw = runJs(JS.debugBookNowCount())
+        log("ডিবাগ — BOOK NOW বাটন মোট/সক্রিয়: $debugRaw")
         val availability = fetchAvailability()
         if (availability.isNullOrEmpty()) {
             log("✗ কোনো টিকেট পাওয়া যায়নি: $fromCity → $toCity")
@@ -544,8 +567,13 @@ class TicketMonitorService : Service() {
     }
 
     private fun log(message: String) {
-        Log.d("TicketMonitor", message)
-        val intent = Intent(ACTION_LOG).putExtra(EXTRA_LOG_MSG, message)
+        val stamped = "[${timeFmt.format(java.util.Date())}] $message"
+        Log.d("TicketMonitor", stamped)
+        synchronized(logBuffer) {
+            logBuffer.add(stamped)
+            while (logBuffer.size > MAX_LOG_LINES) logBuffer.removeAt(0)
+        }
+        val intent = Intent(ACTION_LOG).putExtra(EXTRA_LOG_MSG, stamped)
         sendBroadcast(intent)
     }
 
