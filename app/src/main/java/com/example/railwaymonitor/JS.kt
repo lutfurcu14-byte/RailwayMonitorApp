@@ -154,86 +154,116 @@ object JS {
         })();
     """.trimIndent()
 
-    // পাইথন স্ক্রিপ্টের force_search_date_final() / synchronize_railway_search_date()
-    // ফাংশনের প্রায় হুবহু পোর্ট — jQuery datepicker + hidden Angular formcontrol
-    // + Angular FormControl (component-tree walk) — সব একসাথে ফোর্স-সিঙ্ক করে।
-    fun forceSyncDate(isoDate: String): String = """
+    // পুরনো jQuery-datepicker ধরে নেওয়া লজিকটা বাদ (সাইটে আসলে একটা পপ-আপ
+    // ক্যালেন্ডার-পিকার আছে, ngx-bootstrap bs-datepicker ধাঁচের — সবুজ হেডার,
+    // ‹ › অ্যারো, টেবিল গ্রিড)। তাই এখন সরাসরি UI ক্লিক করে তারিখ বসানো হয়।
+
+    fun openDatePicker(): String = """
         (function(){
-            var target = '$isoDate';
-            var visible = document.querySelector('#doj') || document.querySelector('input.datepicker.hasDatepicker');
-            var hidden = document.querySelector('input[type="hidden"][formcontrolname="doj"]');
-            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            var parts = target.split('-');
-            var y = parseInt(parts[0],10), m = parseInt(parts[1],10)-1, d = parseInt(parts[2],10);
+            var input = document.querySelector('input[placeholder="Pick a date"]')
+                || document.querySelector('input[placeholder*="date" i]');
+            if (!input) return JSON.stringify({ok:false, reason:'input_not_found'});
+            input.click();
+            input.dispatchEvent(new Event('focus', {bubbles:true}));
+            return JSON.stringify({ok:true});
+        })();
+    """.trimIndent()
 
-            try {
-                if (window.jQuery && visible && jQuery.fn.datepicker) {
-                    var dt = new Date(y, m, d);
-                    jQuery(visible).datepicker('setDate', dt);
-                    jQuery(visible).val(String(d).padStart(2,'0') + '-' + months[m] + '-' + y);
-                    jQuery(visible).trigger('change');
+    // ক্যালেন্ডার হেডারে বর্তমানে কোন মাস/বছর দেখাচ্ছে সেটা পড়া, যেমন "September 2026"
+    fun readCalendarHeader(): String = """
+        (function(){
+            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            var pattern = new RegExp('(' + months.join('|') + ')\\s+(\\d{4})');
+            var all = document.querySelectorAll('button, span, div, td, th');
+            for (var i=0;i<all.length;i++){
+                var t = (all[i].textContent||'').trim();
+                var m = t.match(pattern);
+                if (m && t.length < 30) {
+                    var rect = all[i].getBoundingClientRect();
+                    if (rect.width>0 && rect.height>0) return JSON.stringify({month:m[1], year:m[2]});
                 }
-            } catch (e) {}
-
-            if (visible) {
-                try {
-                    var setterV = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-                    setterV.call(visible, String(d).padStart(2,'0') + '-' + months[m] + '-' + y);
-                    visible.dispatchEvent(new Event('input', {bubbles:true}));
-                    visible.dispatchEvent(new Event('change', {bubbles:true}));
-                } catch (e) {}
             }
+            return JSON.stringify({month:null, year:null});
+        })();
+    """.trimIndent()
 
-            if (hidden) {
-                try {
-                    var setterH = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-                    setterH.call(hidden, target);
-                    hidden.dispatchEvent(new Event('input', {bubbles:true}));
-                    hidden.dispatchEvent(new Event('change', {bubbles:true}));
-                } catch (e) {}
-            }
-
-            var controlValue = null;
-            try {
-                var roots = [];
-                [visible, hidden].forEach(function(input){
-                    var node = input;
-                    for (var i=0; node && i<15; i++, node=node.parentElement) {
-                        if (node.__ngContext__) roots.push(node.__ngContext__);
-                    }
-                });
-                var seen = new WeakSet();
-                var queue = roots.map(function(r){ return {obj:r, depth:0}; });
-                while (queue.length) {
-                    var item = queue.shift();
-                    var obj = item.obj;
-                    if (!obj || (typeof obj !== 'object' && typeof obj !== 'function')) continue;
-                    if (seen.has(obj)) continue;
-                    seen.add(obj);
-                    try {
-                        if (obj.controls && obj.controls.doj && typeof obj.controls.doj.setValue === 'function') {
-                            obj.controls.doj.setValue(target);
-                            obj.controls.doj.updateValueAndValidity();
-                            controlValue = obj.controls.doj.value;
-                            break;
-                        }
-                    } catch (e) {}
-                    if (item.depth >= 7) continue;
-                    var keys = [];
-                    try { keys = Object.keys(obj).slice(0,120); } catch(e) {}
-                    for (var k=0; k<keys.length; k++) {
-                        var key = keys[k];
-                        if (key==='nativeElement'||key==='renderer'||key==='elementRef'||key==='ownerDocument'||key==='parentNode') continue;
-                        var v;
-                        try { v = obj[key]; } catch(e) { continue; }
-                        if (v && (typeof v === 'object' || typeof v === 'function')) {
-                            queue.push({obj:v, depth:item.depth+1});
-                        }
-                    }
+    // হেডারের পাশের ‹ (previous) বা › (next) অ্যারোতে ক্লিক করা
+    fun clickCalendarArrow(direction: String): String {
+        val symbol = if (direction == "next") "›" else "‹"
+        val altSymbol = if (direction == "next") ">" else "<"
+        return """
+        (function(){
+            var candidates = Array.prototype.slice.call(document.querySelectorAll('button, span, a, i'));
+            for (var i=0;i<candidates.length;i++){
+                var el = candidates[i];
+                var t = (el.textContent||'').trim();
+                var cls = (el.className||'').toString().toLowerCase();
+                var aria = (el.getAttribute('aria-label')||'').toLowerCase();
+                var isNext = cls.indexOf('next')>=0 || aria.indexOf('next')>=0 || t==='$symbol' || t==='$altSymbol';
+                var isPrev = cls.indexOf('previous')>=0 || cls.indexOf('prev')>=0 || aria.indexOf('previous')>=0 || aria.indexOf('prev')>=0;
+                var want = '$direction';
+                if ((want==='next' && isNext) || (want==='previous' && (cls.indexOf('prev')>=0 || aria.indexOf('prev')>=0 || t==='‹' || t==='<'))) {
+                    var rect = el.getBoundingClientRect();
+                    if (rect.width>0 && rect.height>0) { el.click(); return JSON.stringify({ok:true}); }
                 }
-            } catch(e) {}
+            }
+            return JSON.stringify({ok:false});
+        })();
+        """.trimIndent()
+    }
 
-            return JSON.stringify({hidden: hidden ? hidden.value : null, controlValue: controlValue});
+    // ক্যালেন্ডারে সঠিক দিন-সংখ্যায় ক্লিক করা (disabled/গ্রে করা দিন বাদ দিয়ে)
+    fun clickCalendarDay(day: Int): String = """
+        (function(){
+            var target = '$day';
+            var cells = Array.prototype.slice.call(document.querySelectorAll('td, span, div, button'));
+            var matches = [];
+            for (var i=0;i<cells.length;i++){
+                var el = cells[i];
+                var t = (el.textContent||'').trim();
+                if (t !== target) continue;
+                var rect = el.getBoundingClientRect();
+                if (rect.width<=0 || rect.height<=0) continue;
+                var disabled = el.disabled === true || el.getAttribute('aria-disabled')==='true';
+                var cls = (el.className||'').toString().toLowerCase();
+                if (disabled || cls.indexOf('disabled')>=0) continue;
+                matches.push(el);
+            }
+            if (matches.length === 0) return JSON.stringify({ok:false});
+            // সবচেয়ে "গভীর" (deepest / clickable leaf) এলিমেন্টটা ক্লিক করা
+            var el = matches[matches.length-1];
+            el.click();
+            return JSON.stringify({ok:true});
+        })();
+    """.trimIndent()
+
+    // পাইথন স্ক্রিপ্টের click_suggested_search()-এর পোর্ট — "no ticket" পেজের
+    // "Try Searching with other routes" বক্সে দৃশ্যমান Nth "Search" বাটনে ক্লিক
+    // করে সরাসরি পরের রুটে যাওয়া (হোমপেজে ফিরে আবার ফর্ম না ভরে)।
+    fun clickSuggestedSearch(buttonIndex: Int): String = """
+        (function(){
+            var buttons = Array.prototype.slice.call(document.querySelectorAll('button'));
+            var visible = buttons.filter(function(b){
+                var t = (b.textContent||'').trim();
+                if (t !== 'Search') return false;
+                var rect = b.getBoundingClientRect();
+                return rect.width>0 && rect.height>0 && !b.disabled;
+            });
+            var idx = $buttonIndex - 1;
+            if (idx < 0 || idx >= visible.length) return JSON.stringify({ok:false, found:visible.length});
+            visible[idx].scrollIntoView({block:'center'});
+            visible[idx].click();
+            return JSON.stringify({ok:true});
+        })();
+    """.trimIndent()
+
+    fun getBodyText(): String = "document.body.innerText || '';"
+
+    fun getDateInputValue(): String = """
+        (function(){
+            var input = document.querySelector('input[placeholder="Pick a date"]')
+                || document.querySelector('input[placeholder*="date" i]');
+            return input ? (input.value || '') : '';
         })();
     """.trimIndent()
 }
