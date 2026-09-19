@@ -26,6 +26,10 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+
     </application>
 
 </manifest>
