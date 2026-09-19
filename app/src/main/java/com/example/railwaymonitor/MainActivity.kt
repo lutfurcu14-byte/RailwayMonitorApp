@@ -64,6 +64,12 @@ class MainActivity : ComponentActivity() {
             @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(logReceiver, filter)
         }
+
+        // সার্ভিসে জমে থাকা পুরনো লগ ইতিহাস দেখানো (অ্যাপ বন্ধ থাকা অবস্থায়
+        // যা যা ঘটেছিল তা সহ) — নতুন করে খালি থেকে শুরু না করে।
+        val history = TicketMonitorService.getLogSnapshot()
+        logView.text = history.joinToString("\n")
+        scrollView.post { scrollView.fullScroll(android.view.View.FOCUS_DOWN) }
     }
 
     override fun onStop() {
