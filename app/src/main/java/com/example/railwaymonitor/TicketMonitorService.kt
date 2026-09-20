@@ -198,6 +198,13 @@ class TicketMonitorService : Service() {
                 pageFinishedSignal?.let { if (!it.isCompleted) it.complete(Unit) }
             }
         }
+
+        // এই WebView কখনো কোনো Window-এ যুক্ত হয় না (হেডলেস), তাই Android/
+        // Chromium একে "অদৃশ্য" ধরে রেন্ডারিং/টাইমার থ্রটল করতে পারে। জোর
+        // করে resume করে দেওয়া হচ্ছে, যাতে এই থ্রটলিং কমানো যায়।
+        wv.onResume()
+        wv.resumeTimers()
+
         webView = wv
     }
 
@@ -352,14 +359,14 @@ class TicketMonitorService : Service() {
 
         var openRes = "null"
         var openAttempts = 0
-        while (openAttempts < 8) {
+        while (openAttempts < 20) {
             openRes = runJs(JS.openDatePicker())
             if (openRes.contains("\"ok\":true")) break
-            delay(500)
+            delay(1000)
             openAttempts++
         }
         if (!openRes.contains("\"ok\":true")) {
-            log("⚠ ক্যালেন্ডার খুলতে পারিনি ($openAttempts বার চেষ্টার পরও input পাওয়া যায়নি)")
+            log("⚠ ক্যালেন্ডার খুলতে পারিনি ($openAttempts বার, ~20s চেষ্টার পরও input পাওয়া যায়নি)")
             val htmlDump = runJs(JS.dumpDateFieldHtml())
             log("🔍 ডায়াগনস্টিক HTML: $htmlDump")
             return
