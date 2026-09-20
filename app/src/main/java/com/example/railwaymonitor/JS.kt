@@ -184,116 +184,64 @@ object JS {
 
     fun openDatePicker(): String = """
         (function(){
-            // প্রথমে চেষ্টা: সত্যিকারের <input placeholder="Pick a date">
-            var input = document.querySelector('input[placeholder="Pick a date"]')
-                || document.querySelector('input[placeholder*="date" i]');
+            var input = document.querySelector('input#doi')
+                || document.querySelector('input.hasDatepicker')
+                || document.querySelector('input[placeholder="Pick a date"]');
             if (input) {
+                input.focus();
                 input.click();
-                input.dispatchEvent(new Event('focus', {bubbles:true}));
                 return JSON.stringify({ok:true, via:'input'});
             }
-
-            // ফলব্যাক: এটা হয়তো <input> না, বরং কোনো button/div/span যাতে
-            // "Pick a date" লেখা টেক্সট আছে (অনেক ডেটপিকার লাইব্রেরি এভাবেই
-            // ট্রিগার এলিমেন্ট বানায়)
-            var xp = "//*[contains(normalize-space(text()),'Pick a date')]";
-            var r = document.evaluate(xp, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-            for (var i=0;i<r.snapshotLength;i++){
-                var el = r.snapshotItem(i);
-                var rect = el.getBoundingClientRect();
-                if (rect.width>0 && rect.height>0){
-                    el.click();
-                    return JSON.stringify({ok:true, via:'text-element'});
-                }
-            }
-
-            // আরেকটা ফলব্যাক: "Date of Journey" লেবেলের ঠিক পরের ইনপুট/বক্স
-            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
-            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            var label = lr.singleNodeValue;
-            if (label) {
-                var container = label.parentElement;
-                if (container) {
-                    var clickable = container.querySelector('input, button, div[role], [tabindex]');
-                    if (clickable) {
-                        var rect2 = clickable.getBoundingClientRect();
-                        if (rect2.width>0 && rect2.height>0) {
-                            clickable.click();
-                            return JSON.stringify({ok:true, via:'near-label'});
-                        }
-                    }
-                }
-            }
-
             return JSON.stringify({ok:false, reason:'input_not_found'});
         })();
     """.trimIndent()
 
-    // ক্যালেন্ডার হেডারে বর্তমানে কোন মাস/বছর দেখাচ্ছে সেটা পড়া, যেমন "September 2026"
+    // jQuery UI Datepicker-এর real ক্লাস নাম (.ui-datepicker-month/-year) দিয়ে
+    // হেডার পড়া — মাস/বছর plain span অথবা <select> (changeMonth/changeYear
+    // চালু থাকলে) দুই অবস্থাতেই কাজ করবে।
     fun readCalendarHeader(): String = """
         (function(){
-            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-            var pattern = new RegExp('(' + months.join('|') + ')\\s+(\\d{4})');
-            var all = document.querySelectorAll('button, span, div, td, th');
-            for (var i=0;i<all.length;i++){
-                var t = (all[i].textContent||'').trim();
-                var m = t.match(pattern);
-                if (m && t.length < 30) {
-                    var rect = all[i].getBoundingClientRect();
-                    if (rect.width>0 && rect.height>0) return JSON.stringify({month:m[1], year:m[2]});
+            function readEl(el){
+                if (!el) return null;
+                if (el.tagName === 'SELECT') {
+                    var opt = el.options[el.selectedIndex];
+                    return opt ? opt.textContent.trim() : el.value;
                 }
+                return (el.textContent||'').trim();
             }
-            return JSON.stringify({month:null, year:null});
+            var monthEl = document.querySelector('.ui-datepicker-month');
+            var yearEl = document.querySelector('.ui-datepicker-year');
+            return JSON.stringify({month: readEl(monthEl), year: readEl(yearEl)});
         })();
     """.trimIndent()
 
-    // হেডারের পাশের ‹ (previous) বা › (next) অ্যারোতে ক্লিক করা
     fun clickCalendarArrow(direction: String): String {
-        val symbol = if (direction == "next") "›" else "‹"
-        val altSymbol = if (direction == "next") ">" else "<"
+        val cssClass = if (direction == "next") "ui-datepicker-next" else "ui-datepicker-prev"
         return """
         (function(){
-            var candidates = Array.prototype.slice.call(document.querySelectorAll('button, span, a, i'));
-            for (var i=0;i<candidates.length;i++){
-                var el = candidates[i];
-                var t = (el.textContent||'').trim();
-                var cls = (el.className||'').toString().toLowerCase();
-                var aria = (el.getAttribute('aria-label')||'').toLowerCase();
-                var isNext = cls.indexOf('next')>=0 || aria.indexOf('next')>=0 || t==='$symbol' || t==='$altSymbol';
-                var isPrev = cls.indexOf('previous')>=0 || cls.indexOf('prev')>=0 || aria.indexOf('previous')>=0 || aria.indexOf('prev')>=0;
-                var want = '$direction';
-                if ((want==='next' && isNext) || (want==='previous' && (cls.indexOf('prev')>=0 || aria.indexOf('prev')>=0 || t==='‹' || t==='<'))) {
-                    var rect = el.getBoundingClientRect();
-                    if (rect.width>0 && rect.height>0) { el.click(); return JSON.stringify({ok:true}); }
-                }
-            }
-            return JSON.stringify({ok:false});
+            var el = document.querySelector('.$cssClass');
+            if (!el) return JSON.stringify({ok:false});
+            if ((el.className||'').indexOf('ui-state-disabled')>=0) return JSON.stringify({ok:false, reason:'disabled'});
+            el.click();
+            return JSON.stringify({ok:true});
         })();
         """.trimIndent()
     }
 
-    // ক্যালেন্ডারে সঠিক দিন-সংখ্যায় ক্লিক করা (disabled/গ্রে করা দিন বাদ দিয়ে)
     fun clickCalendarDay(day: Int): String = """
         (function(){
             var target = '$day';
-            var cells = Array.prototype.slice.call(document.querySelectorAll('td, span, div, button'));
-            var matches = [];
-            for (var i=0;i<cells.length;i++){
-                var el = cells[i];
-                var t = (el.textContent||'').trim();
-                if (t !== target) continue;
-                var rect = el.getBoundingClientRect();
-                if (rect.width<=0 || rect.height<=0) continue;
-                var disabled = el.disabled === true || el.getAttribute('aria-disabled')==='true';
-                var cls = (el.className||'').toString().toLowerCase();
-                if (disabled || cls.indexOf('disabled')>=0) continue;
-                matches.push(el);
+            var links = document.querySelectorAll('.ui-datepicker-calendar td a');
+            for (var i=0;i<links.length;i++){
+                var a = links[i];
+                if ((a.textContent||'').trim() === target) {
+                    var td = a.closest('td');
+                    if (td && (td.className||'').indexOf('ui-datepicker-other-month')>=0) continue;
+                    a.click();
+                    return JSON.stringify({ok:true});
+                }
             }
-            if (matches.length === 0) return JSON.stringify({ok:false});
-            // সবচেয়ে "গভীর" (deepest / clickable leaf) এলিমেন্টটা ক্লিক করা
-            var el = matches[matches.length-1];
-            el.click();
-            return JSON.stringify({ok:true});
+            return JSON.stringify({ok:false});
         })();
     """.trimIndent()
 
@@ -337,8 +285,9 @@ object JS {
 
     fun getDateInputValue(): String = """
         (function(){
-            var input = document.querySelector('input[placeholder="Pick a date"]')
-                || document.querySelector('input[placeholder*="date" i]');
+            var input = document.querySelector('input#doi')
+                || document.querySelector('input.hasDatepicker')
+                || document.querySelector('input[placeholder="Pick a date"]');
             if (input) return input.value || '';
 
             var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
