@@ -161,6 +161,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startMonitoring() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            !android.provider.Settings.canDrawOverlays(this)
+        ) {
+            appendLog("⚠ 'Display over other apps' পারমিশন লাগবে — সেটিংস খুলছি, অনুমতি দিয়ে ফিরে এসে আবার চাপুন।")
+            val intent = Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            return
+        }
+
         saveInputs()
         val interval = intervalInput.text.toString().toIntOrNull() ?: 30
         val intent = Intent(this, TicketMonitorService::class.java).apply {
