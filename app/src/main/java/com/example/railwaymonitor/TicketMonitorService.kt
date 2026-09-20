@@ -350,9 +350,16 @@ class TicketMonitorService : Service() {
         )
         val targetMonthName = monthNames.getOrNull(targetMonthIndex) ?: return
 
-        val openRes = runJs(JS.openDatePicker())
+        var openRes = "null"
+        var openAttempts = 0
+        while (openAttempts < 8) {
+            openRes = runJs(JS.openDatePicker())
+            if (openRes.contains("\"ok\":true")) break
+            delay(500)
+            openAttempts++
+        }
         if (!openRes.contains("\"ok\":true")) {
-            log("⚠ ক্যালেন্ডার খুলতে পারিনি (input পাওয়া যায়নি)")
+            log("⚠ ক্যালেন্ডার খুলতে পারিনি ($openAttempts বার চেষ্টার পরও input পাওয়া যায়নি)")
             val htmlDump = runJs(JS.dumpDateFieldHtml())
             log("🔍 ডায়াগনস্টিক HTML: $htmlDump")
             return
