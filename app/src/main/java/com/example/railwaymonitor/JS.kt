@@ -319,6 +319,22 @@ object JS {
 
     fun getBodyText(): String = "document.body.innerText || '';"
 
+    // ডায়াগনস্টিক: "Date of Journey" এর আশেপাশের আসল HTML বের করা, যাতে
+    // অনুমান না করে সত্যিকারের DOM গঠন দেখে সঠিক সিলেক্টর লেখা যায়।
+    fun dumpDateFieldHtml(): String = """
+        (function(){
+            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
+            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            var label = lr.singleNodeValue;
+            if (!label) return JSON.stringify({found:false});
+            var node = label;
+            for (var i=0;i<3 && node.parentElement;i++){ node = node.parentElement; }
+            var html = node.outerHTML || '';
+            if (html.length > 1200) html = html.substring(0, 1200) + '...(truncated)';
+            return JSON.stringify({found:true, html:html});
+        })();
+    """.trimIndent()
+
     fun getDateInputValue(): String = """
         (function(){
             var input = document.querySelector('input[placeholder="Pick a date"]')
