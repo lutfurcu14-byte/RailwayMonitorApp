@@ -184,18 +184,14 @@ object JS {
 
     fun openDatePicker(): String = """
         (function(){
-            // diagnostic dump ঠিক এই পদ্ধতিতেই এলিমেন্টটা খুঁজে পেয়েছিল,
-            // তাই এখন id/class-এর বদলে সরাসরি এই একই (প্রমাণিত) পথ ব্যবহার
-            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
-            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            var label = lr.singleNodeValue;
-            if (!label) return JSON.stringify({ok:false, reason:'label_not_found'});
-            var container = label.parentElement;
-            var input = container ? container.querySelector('input') : null;
-            if (!input && container && container.parentElement) {
-                input = container.parentElement.querySelector('input');
-            }
-            if (!input) return JSON.stringify({ok:false, reason:'input_not_found_near_label'});
+            // ডায়াগনস্টিক কাউন্ট থেকে নিশ্চিত: class ও placeholder একসাথে
+            // মিলিয়ে খুঁজলে নির্ভুলভাবে আসল একমাত্র ইনপুটটা পাওয়া যায়
+            // (id="doi" দিয়ে কেন যেন মেলে না, সম্ভবত রেসপন্সিভ ডুপ্লিকেট
+            // মার্কআপের কারণে)।
+            var input = document.querySelector('input.hasDatepicker[placeholder="Pick a date"]')
+                || document.querySelector('input[placeholder="Pick a date"]')
+                || document.querySelector('input.hasDatepicker');
+            if (!input) return JSON.stringify({ok:false, reason:'input_not_found'});
             input.focus();
             input.click();
             return JSON.stringify({ok:true});
@@ -299,19 +295,10 @@ object JS {
 
     fun getDateInputValue(): String = """
         (function(){
-            var input = document.querySelector('input#doi')
-                || document.querySelector('input.hasDatepicker')
-                || document.querySelector('input[placeholder="Pick a date"]');
-            if (input) return input.value || '';
-
-            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
-            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            var label = lr.singleNodeValue;
-            if (label && label.parentElement) {
-                var t = (label.parentElement.innerText||'').replace('Date of Journey','').trim();
-                return t;
-            }
-            return '';
+            var input = document.querySelector('input.hasDatepicker[placeholder="Pick a date"]')
+                || document.querySelector('input[placeholder="Pick a date"]')
+                || document.querySelector('input.hasDatepicker');
+            return input ? (input.value || '') : '';
         })();
     """.trimIndent()
 }
