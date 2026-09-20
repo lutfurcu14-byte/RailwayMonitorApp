@@ -184,15 +184,21 @@ object JS {
 
     fun openDatePicker(): String = """
         (function(){
-            var input = document.querySelector('input#doi')
-                || document.querySelector('input.hasDatepicker')
-                || document.querySelector('input[placeholder="Pick a date"]');
-            if (input) {
-                input.focus();
-                input.click();
-                return JSON.stringify({ok:true, via:'input'});
+            // diagnostic dump ঠিক এই পদ্ধতিতেই এলিমেন্টটা খুঁজে পেয়েছিল,
+            // তাই এখন id/class-এর বদলে সরাসরি এই একই (প্রমাণিত) পথ ব্যবহার
+            var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
+            var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            var label = lr.singleNodeValue;
+            if (!label) return JSON.stringify({ok:false, reason:'label_not_found'});
+            var container = label.parentElement;
+            var input = container ? container.querySelector('input') : null;
+            if (!input && container && container.parentElement) {
+                input = container.parentElement.querySelector('input');
             }
-            return JSON.stringify({ok:false, reason:'input_not_found'});
+            if (!input) return JSON.stringify({ok:false, reason:'input_not_found_near_label'});
+            input.focus();
+            input.click();
+            return JSON.stringify({ok:true});
         })();
     """.trimIndent()
 
@@ -274,12 +280,20 @@ object JS {
             var labelXp = "//*[contains(normalize-space(text()),'Date of Journey')]";
             var lr = document.evaluate(labelXp, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
             var label = lr.singleNodeValue;
-            if (!label) return JSON.stringify({found:false});
+            var extra = {
+                readyState: document.readyState,
+                iframeCount: document.querySelectorAll('iframe').length,
+                idDoiCount: document.querySelectorAll('input#doi').length,
+                hasDatepickerCount: document.querySelectorAll('input.hasDatepicker').length,
+                placeholderCount: document.querySelectorAll('input[placeholder="Pick a date"]').length,
+                allInputCount: document.querySelectorAll('input').length
+            };
+            if (!label) return JSON.stringify({found:false, extra:extra});
             var node = label;
             for (var i=0;i<3 && node.parentElement;i++){ node = node.parentElement; }
             var html = node.outerHTML || '';
-            if (html.length > 1200) html = html.substring(0, 1200) + '...(truncated)';
-            return JSON.stringify({found:true, html:html});
+            if (html.length > 900) html = html.substring(0, 900) + '...(truncated)';
+            return JSON.stringify({found:true, html:html, extra:extra});
         })();
     """.trimIndent()
 
