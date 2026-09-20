@@ -164,16 +164,28 @@ class TicketMonitorService : Service() {
         monitorJob = null
         webView?.let {
             it.stopLoading()
+            try {
+                if (overlayView === it) {
+                    val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
+                    wm.removeView(it)
+                }
+            } catch (_: Exception) {
+                // ইতিমধ্যে সরানো থাকতে পারে, বা কখনো overlay হিসেবে যুক্তই হয়নি
+            }
             it.destroy()
         }
         webView = null
+        overlayView = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     // ------------------------------------------------------------
-    // WEBVIEW SETUP  (headless: not attached to any window)
+    // WEBVIEW SETUP (overlay window-attached, so Chromium treats it as a
+    // real visible page instead of throttling it as a hidden background tab)
     // ------------------------------------------------------------
+
+    private var overlayView: WebView? = null
 
     private fun setupWebView() {
         val wv = WebView(applicationContext)
@@ -183,25 +195,50 @@ class TicketMonitorService : Service() {
         wv.settings.loadWithOverviewMode = true
         wv.settings.useWideViewPort = true
 
-        // WebView needs real, non-zero layout dimensions for offsetWidth /
-        // getBoundingClientRect-based "is it visible" checks (used heavily
-        // by the ported JS) to work correctly even though it is never
-        // actually shown on screen.
-        wv.measure(
-            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY)
-        )
-        wv.layout(0, 0, 1080, 1920)
-
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 pageFinishedSignal?.let { if (!it.isCompleted) it.complete(Unit) }
             }
         }
 
-        // এই WebView কখনো কোনো Window-এ যুক্ত হয় না (হেডলেস), তাই Android/
-        // Chromium একে "অদৃশ্য" ধরে রেন্ডারিং/টাইমার থ্রটল করতে পারে। জোর
-        // করে resume করে দেওয়া হচ্ছে, যাতে এই থ্রটলিং কমানো যায়।
+        // আগের পদ্ধতিতে (measure/layout করে কিন্তু কোনো Window-এ যুক্ত না
+        // করে) WebView-কে Android/Chromium "ব্যাকগ্রাউন্ড/অদৃশ্য" ধরে
+        // রেন্ডারিং থ্রটল করে দিচ্ছিল, তাই তারিখের ক্যালেন্ডার-নির্ভর অংশ
+        // কখনো ঠিকভাবে initialize হচ্ছিল না। এখন WindowManager দিয়ে
+        // একটা প্রকৃত (১x১ পিক্সেল, অদৃশ্য) overlay window হিসেবে
+        // যুক্ত করা হচ্ছে — এটা এখনও ব্যবহারকারীর চোখে দেখা যাবে না,
+        // কিন্তু Chromium-এর কাছে এটা এখন একটা সত্যিকারের "visible" পেজ,
+        // তাই স্বাভাবিকভাবে রেন্ডার হবে। এর জন্য "Display over other apps"
+        // পারমিশন লাগবে (MainActivity থেকে একবার চাওয়া হয়)।
+        try {
+            val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
+            val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                android.view.WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
+            }
+            val params = android.view.WindowManager.LayoutParams(
+                1, 1,
+                overlayType,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                android.graphics.PixelFormat.TRANSLUCENT
+            )
+            params.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            wm.addView(wv, params)
+            overlayView = wv
+            log("✓ WebView overlay window হিসেবে যুক্ত হয়েছে (রেন্ডারিং থ্রটল এড়াতে)")
+        } catch (e: Exception) {
+            log("⚠ Overlay window যুক্ত করা যায়নি (permission নেই?): ${e.message} — আগের (কম নির্ভরযোগ্য) পদ্ধতিতে চলবে")
+            wv.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY)
+            )
+            wv.layout(0, 0, 1080, 1920)
+        }
+
         wv.onResume()
         wv.resumeTimers()
 
