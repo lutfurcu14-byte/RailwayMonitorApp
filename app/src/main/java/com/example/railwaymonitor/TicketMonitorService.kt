@@ -7,82 +7,128 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Collections
+import java.util.Date
+import java.util.Locale
+import kotlin.coroutines.resume
 
 class TicketMonitorService : Service() {
 
     companion object {
-        const val ACTION_START = "com.example.railwaymonitor.action.START"
-        const val ACTION_STOP = "com.example.railwaymonitor.action.STOP"
 
-        const val EXTRA_DATE = "extra_date"
-        const val EXTRA_BOT_TOKEN = "extra_bot_token"
-        const val EXTRA_CHAT_ID = "extra_chat_id"
-        const val EXTRA_INTERVAL_SEC = "extra_interval_sec"
+        const val ACTION_START =
+            "com.example.railwaymonitor.action.START"
 
-        const val ACTION_LOG = "com.example.railwaymonitor.LOG"
-        const val EXTRA_LOG_MSG = "extra_log_msg"
+        const val ACTION_STOP =
+            "com.example.railwaymonitor.action.STOP"
 
-        private const val CHANNEL_STATUS = "railway_monitor_status"
-        private const val CHANNEL_ALERT = "railway_monitor_alert"
-        private const val NOTIF_ID_STATUS = 1001
+        const val EXTRA_DATE =
+            "extra_date"
 
-        private var alertNotifId = 2000
+        const val EXTRA_BOT_TOKEN =
+            "extra_bot_token"
 
-        const val RAILWAY_HOME = "https://eticket.railway.gov.bd/"
-        const val TRAIN_CLASS = "S_CHAIR"
+        const val EXTRA_CHAT_ID =
+            "extra_chat_id"
+
+        const val EXTRA_INTERVAL_SEC =
+            "extra_interval_sec"
+
+        const val ACTION_LOG =
+            "com.example.railwaymonitor.LOG"
+
+        const val EXTRA_LOG_MSG =
+            "extra_log_msg"
+
+        private const val CHANNEL_STATUS =
+            "railway_monitor_status"
+
+        private const val CHANNEL_ALERT =
+            "railway_monitor_alert_v2"
+
+        private const val NOTIF_ID_STATUS =
+            1001
+
+        private var alertNotifId =
+            2000
+
+        const val RAILWAY_HOME =
+            "https://eticket.railway.gov.bd/"
+
+        const val TRAIN_CLASS =
+            "S_CHAIR"
+
         const val NO_TICKET_MARKER =
             "NOT FINDING ANY TICKET FOR YOUR DESIRED ROUTE"
+
+        private const val MAX_LOG_LINES =
+            400
 
         data class RouteGroup(
             val to: String,
             val froms: List<String>
         )
 
-        val ROUTE_GROUPS = listOf(
-            RouteGroup(
-                "Dhaka",
-                listOf(
-                    "Sylhet",
-                    "Maijgaon",
-                    "Kulaura",
-                    "Shamshernagar",
-                    "Sreemangal",
-                    "Shaistaganj"
-                )
-            ),
-            RouteGroup(
-                "Biman_Bandar",
-                listOf(
-                    "Sylhet",
-                    "Maijgaon",
-                    "Kulaura",
-                    "Shamshernagar",
-                    "Sreemangal",
-                    "Shaistaganj"
+        val ROUTE_GROUPS =
+            listOf(
+
+                RouteGroup(
+                    "Dhaka",
+                    listOf(
+                        "Sylhet",
+                        "Maijgaon",
+                        "Kulaura",
+                        "Shamshernagar",
+                        "Sreemangal",
+                        "Shaistaganj"
+                    )
+                ),
+
+                RouteGroup(
+                    "Biman_Bandar",
+                    listOf(
+                        "Sylhet",
+                        "Maijgaon",
+                        "Kulaura",
+                        "Shamshernagar",
+                        "Sreemangal",
+                        "Shaistaganj"
+                    )
                 )
             )
-        )
-
-        private const val MAX_LOG_LINES = 400
 
         private val logBuffer =
-            java.util.Collections.synchronizedList(mutableListOf<String>())
+            Collections.synchronizedList(
+                mutableListOf<String>()
+            )
 
         private val timeFmt =
-            java.text.SimpleDateFormat(
+            SimpleDateFormat(
                 "HH:mm:ss",
-                java.util.Locale.getDefault()
+                Locale.getDefault()
             )
 
         fun getLogSnapshot(): List<String> =
@@ -91,24 +137,51 @@ class TicketMonitorService : Service() {
             }
     }
 
+    // ============================================================
+    // SERVICE STATE
+    // ============================================================
+
     private val serviceScope =
-        CoroutineScope(Dispatchers.Main + SupervisorJob())
+        CoroutineScope(
+            Dispatchers.Main +
+                SupervisorJob()
+        )
 
-    private var monitorJob: Job? = null
-    private var webView: WebView? = null
-    private var overlayView: WebView? = null
+    private var monitorJob: Job? =
+        null
 
-    private var pageFinishedSignal: CompletableDeferred<Unit>? = null
+    private var webView: WebView? =
+        null
 
-    private var targetDate = "06-09-2026"
-    private var botToken: String? = null
-    private var chatId: String? = null
+    private var overlayView: WebView? =
+        null
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    private var pageFinishedSignal:
+        CompletableDeferred<Unit>? =
+        null
+
+    private var targetDate =
+        "06-09-2026"
+
+    private var botToken:
+        String? =
+        null
+
+    private var chatId:
+        String? =
+        null
+
+    // ============================================================
+    // SERVICE
+    // ============================================================
+
+    override fun onBind(
+        intent: Intent?
+    ): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        createChannels()
+        createNotificationChannels()
     }
 
     override fun onStartCommand(
@@ -124,20 +197,56 @@ class TicketMonitorService : Service() {
                 return START_NOT_STICKY
             }
 
-            else -> {
+            ACTION_START,
+            null -> {
+
                 targetDate =
-                    intent?.getStringExtra(EXTRA_DATE)
-                        ?: targetDate
+                    intent?.getStringExtra(
+                        EXTRA_DATE
+                    ) ?: targetDate
 
                 botToken =
-                    intent?.getStringExtra(EXTRA_BOT_TOKEN)
+                    intent?.getStringExtra(
+                        EXTRA_BOT_TOKEN
+                    )
 
                 chatId =
-                    intent?.getStringExtra(EXTRA_CHAT_ID)
+                    intent?.getStringExtra(
+                        EXTRA_CHAT_ID
+                    )
 
                 startForeground(
                     NOTIF_ID_STATUS,
-                    buildStatusNotification("চালু হচ্ছে...")
+                    buildStatusNotification(
+                        "চালু হচ্ছে..."
+                    )
+                )
+
+                startMonitoring()
+            }
+
+            else -> {
+
+                targetDate =
+                    intent.getStringExtra(
+                        EXTRA_DATE
+                    ) ?: targetDate
+
+                botToken =
+                    intent.getStringExtra(
+                        EXTRA_BOT_TOKEN
+                    )
+
+                chatId =
+                    intent.getStringExtra(
+                        EXTRA_CHAT_ID
+                    )
+
+                startForeground(
+                    NOTIF_ID_STATUS,
+                    buildStatusNotification(
+                        "চালু হচ্ছে..."
+                    )
                 )
 
                 startMonitoring()
@@ -148,8 +257,11 @@ class TicketMonitorService : Service() {
     }
 
     override fun onDestroy() {
+
         stopMonitoring()
+
         serviceScope.cancel()
+
         super.onDestroy()
     }
 
@@ -159,120 +271,214 @@ class TicketMonitorService : Service() {
 
     private fun startMonitoring() {
 
-        if (monitorJob?.isActive == true) return
+        if (
+            monitorJob?.isActive == true
+        ) {
+            return
+        }
 
         setupWebView()
 
-        monitorJob = serviceScope.launch {
+        monitorJob =
+            serviceScope.launch {
 
-            val totalRoutes =
-                ROUTE_GROUPS.sumOf { it.froms.size }
+                val totalRoutes =
+                    ROUTE_GROUPS.sumOf {
+                        it.froms.size
+                    }
 
-            log(
-                "মনিটরিং শুরু | তারিখ: $targetDate | " +
-                    "$totalRoutes রুট"
-            )
+                log(
+                    "================================"
+                )
 
-            var cycle = 0
+                log(
+                    "MONITORING STARTED"
+                )
 
-            while (isActive) {
+                log(
+                    "Date: $targetDate"
+                )
 
-                cycle++
+                log(
+                    "Class: $TRAIN_CLASS"
+                )
 
-                log("========== CYCLE #$cycle START ==========")
+                log(
+                    "Total routes: $totalRoutes"
+                )
 
-                var routeCounter = 0
+                log(
+                    "================================"
+                )
 
-                for (group in ROUTE_GROUPS) {
+                var cycle =
+                    0
 
-                    if (!isActive) break
+                while (
+                    currentCoroutineContext()
+                        .isActive
+                ) {
 
-                    /*
-                     * একটি group-এর প্রথম route সবসময় FULL।
-                     * কোনো route-এ NO TICKET পাওয়া গেলে পরের route
-                     * একই result page-এর suggested Search দিয়ে চেষ্টা হবে।
-                     */
-                    var lastWasNoTicket = false
+                    cycle++
 
-                    for ((index, fromCity) in group.froms.withIndex()) {
+                    log(
+                        "========== CYCLE #$cycle START =========="
+                    )
 
-                        if (!isActive) break
+                    var routeCounter =
+                        0
 
-                        routeCounter++
+                    for (
+                        group in ROUTE_GROUPS
+                    ) {
 
-                        updateStatus(
-                            "[$cycle] $routeCounter/$totalRoutes: " +
-                                "$fromCity → ${group.to}"
-                        )
-
-                        try {
-
-                            lastWasNoTicket =
-                                if (index == 0 || !lastWasNoTicket) {
-
-                                    checkRouteFull(
-                                        fromCity,
-                                        group.to
-                                    )
-
-                                } else {
-
-                                    checkRouteQuick(
-                                        fromCity,
-                                        group.to
-                                    )
-                                }
-
-                        } catch (e: CancellationException) {
-
-                            throw e
-
-                        } catch (e: Exception) {
-
-                            log(
-                                "✗ Route error " +
-                                    "($fromCity → ${group.to}): " +
-                                    "${e.message}"
-                            )
-
-                            lastWasNoTicket = false
+                        if (
+                            !currentCoroutineContext()
+                                .isActive
+                        ) {
+                            break
                         }
 
                         /*
-                         * প্রত্যেক route-এর result-এর পরে 2 sec।
+                         * প্রথম route FULL।
+                         *
+                         * কোনো route NO TICKET হলে
+                         * পরের route QUICK mode-এ যাবে।
+                         *
+                         * Ticket/error হলে পরের route FULL।
                          */
-                        if (isActive) {
-                            log("পরবর্তী রুটের আগে 2 sec অপেক্ষা...")
-                            delay(2_000)
+                        var lastWasNoTicket =
+                            false
+
+                        for (
+                            index in group.froms.indices
+                        ) {
+
+                            if (
+                                !currentCoroutineContext()
+                                    .isActive
+                            ) {
+                                break
+                            }
+
+                            val fromCity =
+                                group.froms[index]
+
+                            routeCounter++
+
+                            updateStatus(
+                                "[$cycle] " +
+                                    "$routeCounter/$totalRoutes: " +
+                                    "$fromCity → ${group.to}"
+                            )
+
+                            try {
+
+                                lastWasNoTicket =
+                                    if (
+                                        index == 0 ||
+                                        !lastWasNoTicket
+                                    ) {
+
+                                        checkRouteFull(
+                                            fromCity,
+                                            group.to
+                                        )
+
+                                    } else {
+
+                                        checkRouteQuick(
+                                            fromCity,
+                                            group.to
+                                        )
+                                    }
+
+                            } catch (
+                                e: CancellationException
+                            ) {
+
+                                throw e
+
+                            } catch (
+                                e: Exception
+                            ) {
+
+                                log(
+                                    "✗ Route error: " +
+                                        "$fromCity → ${group.to} | " +
+                                        "${e.message}"
+                                )
+
+                                lastWasNoTicket =
+                                    false
+                            }
+
+                            /*
+                             * প্রতিটি route result-এর পরে
+                             * 2 second pause.
+                             */
+                            if (
+                                currentCoroutineContext()
+                                    .isActive
+                            ) {
+
+                                log(
+                                    "Next route in 2 sec..."
+                                )
+
+                                delay(2_000)
+                            }
                         }
                     }
-                }
 
-                /*
-                 * Odd cycle = 13 sec
-                 * Even cycle = 14 sec
-                 */
-                val cyclePause =
-                    if (cycle % 2 == 1) 13 else 14
+                    /*
+                     * Odd cycle = 13 sec
+                     * Even cycle = 14 sec
+                     */
+                    val cyclePause =
+                        if (
+                            cycle % 2 == 1
+                        ) {
+                            13
+                        } else {
+                            14
+                        }
 
-                log(
-                    "========== CYCLE #$cycle END | " +
-                        "$cyclePause sec pause =========="
-                )
+                    log(
+                        "========== CYCLE #$cycle END =========="
+                    )
 
-                if (isActive) {
-                    delay(cyclePause * 1000L)
+                    log(
+                        "Next cycle in $cyclePause sec..."
+                    )
+
+                    if (
+                        currentCoroutineContext()
+                            .isActive
+                    ) {
+                        delay(
+                            cyclePause * 1_000L
+                        )
+                    }
                 }
             }
-        }
     }
+
+    // ============================================================
+    // STOP
+    // ============================================================
 
     private fun stopMonitoring() {
 
         monitorJob?.cancel()
-        monitorJob = null
 
-        webView?.let { wv ->
+        monitorJob =
+            null
+
+        val wv =
+            webView
+
+        if (wv != null) {
 
             try {
                 wv.stopLoading()
@@ -280,14 +486,29 @@ class TicketMonitorService : Service() {
             }
 
             try {
-                if (overlayView === wv) {
+
+                if (
+                    overlayView === wv
+                ) {
 
                     val wm =
-                        getSystemService(WINDOW_SERVICE)
-                            as android.view.WindowManager
+                        getSystemService(
+                            WINDOW_SERVICE
+                        ) as android.view.WindowManager
 
                     wm.removeView(wv)
                 }
+
+            } catch (_: Exception) {
+            }
+
+            try {
+                wv.onPause()
+            } catch (_: Exception) {
+            }
+
+            try {
+                wv.pauseTimers()
             } catch (_: Exception) {
             }
 
@@ -297,10 +518,35 @@ class TicketMonitorService : Service() {
             }
         }
 
-        webView = null
-        overlayView = null
+        webView =
+            null
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        overlayView =
+            null
+
+        try {
+
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.N
+            ) {
+
+                stopForeground(
+                    STOP_FOREGROUND_REMOVE
+                )
+
+            } else {
+
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+
+        } catch (_: Exception) {
+        }
+
+        log(
+            "✓ Monitoring stopped"
+        )
 
         try {
             stopSelf()
@@ -314,13 +560,27 @@ class TicketMonitorService : Service() {
 
     private fun setupWebView() {
 
-        val wv = WebView(applicationContext)
+        if (webView != null) {
+            return
+        }
 
-        wv.settings.javaScriptEnabled = true
-        wv.settings.domStorageEnabled = true
-        wv.settings.databaseEnabled = true
-        wv.settings.loadWithOverviewMode = true
-        wv.settings.useWideViewPort = true
+        val wv =
+            WebView(applicationContext)
+
+        wv.settings.javaScriptEnabled =
+            true
+
+        wv.settings.domStorageEnabled =
+            true
+
+        wv.settings.databaseEnabled =
+            true
+
+        wv.settings.loadWithOverviewMode =
+            true
+
+        wv.settings.useWideViewPort =
+            true
 
         wv.webViewClient =
             object : WebViewClient() {
@@ -329,8 +589,13 @@ class TicketMonitorService : Service() {
                     view: WebView?,
                     url: String?
                 ) {
+
                     pageFinishedSignal?.let {
-                        if (!it.isCompleted) {
+
+                        if (
+                            !it.isCompleted
+                        ) {
+
                             it.complete(Unit)
                         }
                     }
@@ -340,95 +605,163 @@ class TicketMonitorService : Service() {
         try {
 
             val wm =
-                getSystemService(WINDOW_SERVICE)
-                    as android.view.WindowManager
+                getSystemService(
+                    WINDOW_SERVICE
+                ) as android.view.WindowManager
 
-            val overlayType =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val type =
+                if (
+                    Build.VERSION.SDK_INT >=
+                    Build.VERSION_CODES.O
+                ) {
 
-                    android.view.WindowManager.LayoutParams
+                    android.view.WindowManager
+                        .LayoutParams
                         .TYPE_APPLICATION_OVERLAY
 
                 } else {
 
                     @Suppress("DEPRECATION")
-                    android.view.WindowManager.LayoutParams
+                    android.view.WindowManager
+                        .LayoutParams
                         .TYPE_SYSTEM_ALERT
                 }
 
             val params =
                 android.view.WindowManager.LayoutParams(
+
                     1,
                     1,
-                    overlayType,
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                    android.graphics.PixelFormat.TRANSLUCENT
+
+                    type,
+
+                    android.view.WindowManager
+                        .LayoutParams
+                        .FLAG_NOT_FOCUSABLE or
+                        android.view.WindowManager
+                            .LayoutParams
+                            .FLAG_NOT_TOUCHABLE or
+                        android.view.WindowManager
+                            .LayoutParams
+                            .FLAG_LAYOUT_NO_LIMITS,
+
+                    android.graphics.PixelFormat
+                        .TRANSLUCENT
                 )
 
             params.gravity =
                 android.view.Gravity.TOP or
                     android.view.Gravity.START
 
-            wm.addView(wv, params)
+            wm.addView(
+                wv,
+                params
+            )
 
-            overlayView = wv
+            overlayView =
+                wv
 
-            log("✓ WebView overlay window যুক্ত হয়েছে")
+            log(
+                "✓ WebView overlay attached"
+            )
 
         } catch (e: Exception) {
 
             log(
-                "⚠ Overlay যুক্ত করা যায়নি: " +
+                "⚠ Overlay unavailable: " +
                     "${e.message}"
             )
 
-            wv.measure(
-                View.MeasureSpec.makeMeasureSpec(
-                    1080,
-                    View.MeasureSpec.EXACTLY
-                ),
-                View.MeasureSpec.makeMeasureSpec(
-                    1920,
-                    View.MeasureSpec.EXACTLY
-                )
-            )
+            try {
 
-            wv.layout(
-                0,
-                0,
-                1080,
-                1920
-            )
+                wv.measure(
+                    View.MeasureSpec.makeMeasureSpec(
+                        1080,
+                        View.MeasureSpec.EXACTLY
+                    ),
+                    View.MeasureSpec.makeMeasureSpec(
+                        1920,
+                        View.MeasureSpec.EXACTLY
+                    )
+                )
+
+                wv.layout(
+                    0,
+                    0,
+                    1080,
+                    1920
+                )
+
+            } catch (e2: Exception) {
+
+                log(
+                    "⚠ WebView fallback failed: " +
+                        "${e2.message}"
+                )
+            }
         }
 
-        wv.onResume()
-        wv.resumeTimers()
+        try {
+            wv.onResume()
+        } catch (_: Exception) {
+        }
 
-        webView = wv
+        try {
+            wv.resumeTimers()
+        } catch (_: Exception) {
+        }
+
+        webView =
+            wv
     }
+
+    // ============================================================
+    // LOAD HOME
+    // ============================================================
 
     private suspend fun loadHome() {
 
-        val wv = webView ?: return
+        val wv =
+            webView
+                ?: return
 
         pageFinishedSignal =
             CompletableDeferred()
 
-        wv.loadUrl(RAILWAY_HOME)
+        try {
+            wv.loadUrl(
+                RAILWAY_HOME
+            )
+        } catch (e: Exception) {
 
-        withTimeoutOrNull(20_000) {
+            log(
+                "✗ loadUrl error: " +
+                    "${e.message}"
+            )
+
+            return
+        }
+
+        withTimeoutOrNull(
+            20_000
+        ) {
             pageFinishedSignal?.await()
         }
 
-        delay(1500)
+        delay(1_500)
     }
+
+    // ============================================================
+    // JAVASCRIPT
+    // ============================================================
 
     private suspend fun runJs(
         js: String
-    ): String =
-        withContext(Dispatchers.Main) {
+    ): String {
+
+        return withContext(
+            Dispatchers.Main
+        ) {
 
             val wv =
                 webView
@@ -436,16 +769,38 @@ class TicketMonitorService : Service() {
 
             suspendCancellableCoroutine { cont ->
 
-                wv.evaluateJavascript(js) { result ->
+                try {
 
-                    if (cont.isActive) {
+                    wv.evaluateJavascript(
+                        js
+                    ) { result ->
+
+                        if (
+                            cont.isActive
+                        ) {
+
+                            cont.resume(
+                                result ?: "null"
+                            ) {}
+                        }
+                    }
+
+                } catch (
+                    e: Exception
+                ) {
+
+                    if (
+                        cont.isActive
+                    ) {
+
                         cont.resume(
-                            result ?: "null"
+                            "null"
                         ) {}
                     }
                 }
             }
         }
+    }
 
     // ============================================================
     // FULL ROUTE
@@ -457,64 +812,121 @@ class TicketMonitorService : Service() {
     ): Boolean {
 
         log(
-            "\n--- FULL ROUTE: " +
-                "$fromCity → $toCity ---"
+            ""
+        )
+
+        log(
+            "--- FULL ROUTE ---"
+        )
+
+        log(
+            "$fromCity → $toCity"
+        )
+
+        log(
+            "Date: $targetDate"
+        )
+
+        log(
+            "Class: $TRAIN_CLASS"
         )
 
         loadHome()
 
+        /*
+         * Cookie/consent popup.
+         */
         runJs(
-            JS.clickTextButton("I AGREE")
+            JS.clickTextButton(
+                "I AGREE"
+            )
         )
 
         runJs(
-            JS.clickTextButton("I Agree")
+            JS.clickTextButton(
+                "I Agree"
+            )
         )
 
         delay(500)
 
-        // FROM
-        if (!selectCity("fromcity", fromCity)) {
-            log(
-                "✗ FROM city set failed: $fromCity"
+        /*
+         * FROM
+         */
+        if (
+            !selectCity(
+                "fromcity",
+                fromCity
             )
+        ) {
+
+            log(
+                "✗ FROM failed: $fromCity"
+            )
+
             return false
         }
 
-        // TO
-        if (!selectCity("tocity", toCity)) {
-            log(
-                "✗ TO city set failed: $toCity"
+        /*
+         * TO
+         */
+        if (
+            !selectCity(
+                "tocity",
+                toCity
             )
+        ) {
+
+            log(
+                "✗ TO failed: $toCity"
+            )
+
             return false
         }
 
-        // DATE
-        if (!setJourneyDate(targetDate)) {
-            log(
-                "✗ Date set failed: $targetDate"
+        /*
+         * DATE
+         */
+        if (
+            !setJourneyDate(
+                targetDate
             )
+        ) {
+
+            log(
+                "✗ Date failed: $targetDate"
+            )
+
             return false
         }
 
         delay(500)
 
-        // CLASS
-        if (!selectTrainClass()) {
+        /*
+         * CLASS
+         */
+        if (
+            !selectTrainClass()
+        ) {
+
             log(
-                "✗ $TRAIN_CLASS selection failed"
+                "✗ Class failed: $TRAIN_CLASS"
             )
+
             return false
         }
 
         delay(500)
 
-        // close possible popup/dropdown
+        /*
+         * Close dropdown/popup.
+         */
         runJs(
             """
             (function(){
                 try{
                     document.body.click();
+
                     document.body.dispatchEvent(
                         new KeyboardEvent(
                             'keydown',
@@ -531,54 +943,74 @@ class TicketMonitorService : Service() {
 
         delay(500)
 
-        // Final verification
-        val formState =
+        /*
+         * Final form state.
+         */
+        var formState =
             runJs(
-                JS.getSearchFormState(TRAIN_CLASS)
+                JS.getSearchFormState(
+                    TRAIN_CLASS
+                )
             )
 
         log(
             "FORM STATE: $formState"
         )
 
-        if (!formState.contains("\"ready\":true")) {
+        if (
+            !formState.contains(
+                "\"ready\":true"
+            )
+        ) {
 
             log(
-                "⚠ Search form ready নয়। " +
-                    "আরেকবার verify করা হচ্ছে..."
+                "⚠ Form not ready; retrying verification..."
             )
 
-            delay(1000)
+            delay(1_000)
 
-            val retryState =
+            formState =
                 runJs(
-                    JS.getSearchFormState(TRAIN_CLASS)
+                    JS.getSearchFormState(
+                        TRAIN_CLASS
+                    )
                 )
 
-            if (!retryState.contains("\"ready\":true")) {
+            log(
+                "FORM STATE RETRY: $formState"
+            )
+
+            if (
+                !formState.contains(
+                    "\"ready\":true"
+                )
+            ) {
 
                 log(
-                    "✗ From/To/Date/Class সম্পূর্ণ ready নয়"
+                    "✗ From/To/Date/Class not ready"
                 )
 
                 return false
             }
         }
 
-        // SEARCH
-        val clicked =
-            waitAndClickSearch()
-
-        if (!clicked) {
+        /*
+         * Search button.
+         */
+        if (
+            !waitAndClickSearch()
+        ) {
 
             log(
-                "✗ Search button click করা যায়নি"
+                "✗ Search button not clicked"
             )
 
             return false
         }
 
-        log("✓ Search Trains clicked")
+        log(
+            "✓ Search Trains clicked"
+        )
 
         return handleResultPage(
             fromCity,
@@ -597,18 +1029,22 @@ class TicketMonitorService : Service() {
     ): Boolean {
 
         log(
-            "\n--- QUICK ROUTE: " +
-                "$fromCity → $toCity ---"
+            ""
+        )
+
+        log(
+            "--- QUICK ROUTE ---"
+        )
+
+        log(
+            "$fromCity → $toCity"
         )
 
         val before =
-            runJs(JS.getBodyText())
+            runJs(
+                JS.getBodyText()
+            )
 
-        /*
-         * এখন আর সবসময় Search button #1 click করা হবে না।
-         * JS নিজে expected FROM/TO text অনুযায়ী
-         * suggested route-এর Search button খুঁজবে।
-         */
         val clickResult =
             runJs(
                 JS.clickSuggestedSearchForRoute(
@@ -618,14 +1054,21 @@ class TicketMonitorService : Service() {
             )
 
         log(
-            "Suggested Search result: $clickResult"
+            "Suggested Search: $clickResult"
         )
 
-        if (!clickResult.contains("\"ok\":true")) {
+        if (
+            !clickResult.contains(
+                "\"ok\":true"
+            )
+        ) {
 
             log(
-                "⚠ Expected suggested route পাওয়া যায়নি। " +
-                    "FULL search-এ fallback."
+                "⚠ Suggested route not found"
+            )
+
+            log(
+                "→ Falling back to FULL route"
             )
 
             return checkRouteFull(
@@ -634,24 +1077,37 @@ class TicketMonitorService : Service() {
             )
         }
 
+        /*
+         * Wait for navigation/body change.
+         */
         val deadline =
-            System.currentTimeMillis() + 20_000
+            System.currentTimeMillis() +
+                20_000
 
-        var changed = false
+        var changed =
+            false
 
         while (
-            isActive &&
-            System.currentTimeMillis() < deadline
+            currentCoroutineContext()
+                .isActive &&
+            System.currentTimeMillis() <
+                deadline
         ) {
 
             delay(500)
 
             val now =
-                runJs(JS.getBodyText())
+                runJs(
+                    JS.getBodyText()
+                )
 
-            if (now != before) {
+            if (
+                now != before
+            ) {
 
-                changed = true
+                changed =
+                    true
+
                 break
             }
         }
@@ -659,18 +1115,15 @@ class TicketMonitorService : Service() {
         if (!changed) {
 
             log(
-                "⚠ Suggested Search-এর পরে body পরিবর্তন শনাক্ত হয়নি"
+                "⚠ Body change not detected after quick search"
             )
         }
 
         /*
-         * Result page render হওয়ার জন্য একটু সময়।
+         * Give Railway result page time to render.
          */
-        delay(1500)
+        delay(1_500)
 
-        /*
-         * Expected route verification.
-         */
         val routeCheck =
             runJs(
                 JS.verifyResultRoute(
@@ -683,15 +1136,6 @@ class TicketMonitorService : Service() {
             "QUICK route verification: $routeCheck"
         )
 
-        if (
-            routeCheck.contains("\"ok\":false")
-        ) {
-
-            log(
-                "⚠ Expected route নিশ্চিত করা যায়নি"
-            )
-        }
-
         return handleResultPage(
             fromCity,
             toCity,
@@ -700,7 +1144,7 @@ class TicketMonitorService : Service() {
     }
 
     // ============================================================
-    // CITY
+    // CITY SELECTION
     // ============================================================
 
     private suspend fun selectCity(
@@ -708,36 +1152,60 @@ class TicketMonitorService : Service() {
         city: String
     ): Boolean {
 
-        repeat(3) { attempt ->
+        for (
+            attempt in 1..3
+        ) {
 
-            runJs(
-                JS.typeIntoCityField(
-                    controlName,
-                    city
-                )
-            )
+            if (
+                !currentCoroutineContext()
+                    .isActive
+            ) {
+                return false
+            }
 
-            delay(1000)
-
-            val optionResult =
+            val typed =
                 runJs(
-                    JS.clickCityOption(city)
+                    JS.typeIntoCityField(
+                        controlName,
+                        city
+                    )
                 )
 
             log(
-                "$controlName → $city | " +
-                    "option=$optionResult"
+                "$controlName typing attempt " +
+                    "$attempt: $typed"
+            )
+
+            delay(1_000)
+
+            val option =
+                runJs(
+                    JS.clickCityOption(
+                        city
+                    )
+                )
+
+            log(
+                "$controlName option: $option"
             )
 
             delay(700)
 
-            val finalValue =
+            val value =
                 runJs(
-                    JS.getInputValue(controlName)
-                ).trim('"')
+                    JS.getInputValue(
+                        controlName
+                    )
+                )
+                    .trim('"')
+                    .trim()
+
+            log(
+                "$controlName value: '$value'"
+            )
 
             if (
-                finalValue.equals(
+                value.equals(
                     city,
                     ignoreCase = true
                 )
@@ -750,12 +1218,6 @@ class TicketMonitorService : Service() {
                 return true
             }
 
-            log(
-                "⚠ Attempt ${attempt + 1}: " +
-                    "$controlName='$finalValue', " +
-                    "expected='$city'"
-            )
-
             delay(500)
         }
 
@@ -767,37 +1229,45 @@ class TicketMonitorService : Service() {
     // ============================================================
 
     private suspend fun setJourneyDate(
-        ddmmyyyy: String
+        date: String
     ): Boolean {
 
         val parts =
-            ddmmyyyy.split("-")
+            date.split("-")
 
-        if (parts.size != 3) {
+        if (
+            parts.size != 3
+        ) {
 
             log(
-                "⚠ Invalid date: $ddmmyyyy"
+                "✗ Invalid date: $date"
             )
 
             return false
         }
 
-        val targetDay =
+        val day =
             parts[0].toIntOrNull()
                 ?: return false
 
-        val targetMonthIndex =
-            (parts[1].toIntOrNull()
-                ?: return false) - 1
+        val month =
+            parts[1].toIntOrNull()
+                ?: return false
 
-        val targetYear =
+        val year =
             parts[2].toIntOrNull()
                 ?: return false
 
         if (
-            targetMonthIndex !in 0..11 ||
-            targetDay !in 1..31
+            day !in 1..31 ||
+            month !in 1..12 ||
+            year < 2020
         ) {
+
+            log(
+                "✗ Invalid date values: $date"
+            )
+
             return false
         }
 
@@ -818,37 +1288,28 @@ class TicketMonitorService : Service() {
             )
 
         val targetMonthName =
-            monthNames[targetMonthIndex]
+            monthNames[month - 1]
 
-        var opened = false
-
-        repeat(15) {
-
-            val result =
-                runJs(
-                    JS.openDatePicker()
-                )
-
-            if (
-                result.contains("\"ok\":true")
-            ) {
-
-                opened = true
-                return@repeat
-            }
-
-            delay(700)
-        }
-
-        if (!opened) {
-
-            log(
-                "✗ Date picker খুলতে পারিনি"
+        /*
+         * Open calendar.
+         */
+        val opened =
+            runJs(
+                JS.openDatePicker()
             )
 
+        log(
+            "Open date picker: $opened"
+        )
+
+        if (
+            !opened.contains(
+                "\"ok\":true"
+            )
+        ) {
+
             log(
-                "Date diagnostic: " +
-                    runJs(JS.dumpDateFieldHtml())
+                "✗ Date picker could not be opened"
             )
 
             return false
@@ -856,16 +1317,32 @@ class TicketMonitorService : Service() {
 
         delay(700)
 
-        var correctMonth = false
+        /*
+         * Navigate calendar.
+         *
+         * for loop ব্যবহার করা হয়েছে যাতে
+         * break compile-safe হয়।
+         */
+        var correctMonth =
+            false
 
-        repeat(30) {
+        for (
+            step in 0 until 30
+        ) {
+
+            if (
+                !currentCoroutineContext()
+                    .isActive
+            ) {
+                return false
+            }
 
             val headerRaw =
                 runJs(
                     JS.readCalendarHeader()
                 )
 
-            val month =
+            val monthText =
                 Regex(
                     "\"month\":\"([^\"]*)\""
                 )
@@ -873,45 +1350,76 @@ class TicketMonitorService : Service() {
                     ?.groupValues
                     ?.get(1)
 
-            val year =
+            val yearText =
                 Regex(
                     "\"year\":\"([^\"]*)\""
                 )
                     .find(headerRaw)
                     ?.groupValues
                     ?.get(1)
-                    ?.toIntOrNull()
+
+            val currentYear =
+                yearText?.toIntOrNull()
 
             if (
-                month == targetMonthName &&
-                year == targetYear
+                monthText ==
+                    targetMonthName &&
+                currentYear ==
+                    year
             ) {
 
-                correctMonth = true
-                return@repeat
+                correctMonth =
+                    true
+
+                break
             }
 
             if (
-                month == null ||
-                year == null
+                monthText == null ||
+                currentYear == null
             ) {
-                delay(300)
-                return@repeat
+
+                delay(400)
+
+                continue
+            }
+
+            val currentMonthIndex =
+                monthNames.indexOf(
+                    monthText
+                )
+
+            if (
+                currentMonthIndex < 0
+            ) {
+
+                log(
+                    "⚠ Unknown calendar month: " +
+                        monthText
+                )
+
+                delay(400)
+
+                continue
             }
 
             val currentIndex =
-                monthNames.indexOf(month) +
-                    year * 12
+                currentYear * 12 +
+                    currentMonthIndex
 
             val targetIndex =
-                targetMonthIndex +
-                    targetYear * 12
+                year * 12 +
+                    (month - 1)
 
             val direction =
-                if (targetIndex > currentIndex)
+                if (
+                    targetIndex >
+                        currentIndex
+                ) {
                     "next"
-                else
+                } else {
                     "previous"
+                }
 
             val arrow =
                 runJs(
@@ -921,28 +1429,40 @@ class TicketMonitorService : Service() {
                 )
 
             if (
-                !arrow.contains("\"ok\":true")
+                !arrow.contains(
+                    "\"ok\":true"
+                )
             ) {
+
+                log(
+                    "✗ Calendar $direction arrow failed"
+                )
+
                 break
             }
 
-            delay(350)
+            delay(400)
         }
 
-        if (!correctMonth) {
+        if (
+            !correctMonth
+        ) {
 
             log(
-                "✗ Target month/year পাওয়া যায়নি: " +
-                    "$targetMonthName $targetYear"
+                "✗ Target month/year not found: " +
+                    "$targetMonthName $year"
             )
 
             return false
         }
 
+        /*
+         * Click target day.
+         */
         val dayResult =
             runJs(
                 JS.clickCalendarDay(
-                    targetDay
+                    day
                 )
             )
 
@@ -950,47 +1470,67 @@ class TicketMonitorService : Service() {
             "Calendar day result: $dayResult"
         )
 
+        if (
+            !dayResult.contains(
+                "\"ok\":true"
+            )
+        ) {
+
+            log(
+                "✗ Calendar day click failed"
+            )
+
+            return false
+        }
+
         delay(700)
 
         val finalValue =
             runJs(
                 JS.getDateInputValue()
-            ).trim('"')
+            )
+                .trim('"')
+                .trim()
 
         log(
-            "Date input after selection: $finalValue"
+            "Date input: $finalValue"
         )
 
-        /*
-         * Exact format site অনুযায়ী হতে পারে।
-         * তাই expected day/month/year দিয়ে verify করা হচ্ছে।
-         */
-        val dateOk =
+        val verified =
             runJs(
                 JS.verifyDateValue(
-                    targetDay,
-                    targetMonthIndex,
-                    targetYear
+                    day,
+                    month - 1,
+                    year
                 )
             )
 
         log(
-            "Date verification: $dateOk"
+            "Date verification: $verified"
         )
 
-        return (
-            dayResult.contains("\"ok\":true") &&
-                dateOk.contains("\"ok\":true")
-            )
+        return verified.contains(
+            "\"ok\":true"
+        )
     }
 
     // ============================================================
     // CLASS
     // ============================================================
 
-    private suspend fun selectTrainClass(): Boolean {
+    private suspend fun selectTrainClass():
+        Boolean {
 
-        repeat(3) { attempt ->
+        for (
+            attempt in 1..3
+        ) {
+
+            if (
+                !currentCoroutineContext()
+                    .isActive
+            ) {
+                return false
+            }
 
             val result =
                 runJs(
@@ -1000,7 +1540,7 @@ class TicketMonitorService : Service() {
                 )
 
             log(
-                "Class selection attempt ${attempt + 1}: " +
+                "Class selection #$attempt: " +
                     result
             )
 
@@ -1018,8 +1558,11 @@ class TicketMonitorService : Service() {
             )
 
             if (
-                verify.contains("\"ok\":true")
+                verify.contains(
+                    "\"ok\":true"
+                )
             ) {
+
                 return true
             }
 
@@ -1030,22 +1573,23 @@ class TicketMonitorService : Service() {
     }
 
     // ============================================================
-    // SEARCH
+    // SEARCH BUTTON
     // ============================================================
 
-    private suspend fun waitAndClickSearch(): Boolean {
+    private suspend fun waitAndClickSearch():
+        Boolean {
 
         val deadline =
-            System.currentTimeMillis() + 30_000
+            System.currentTimeMillis() +
+                30_000
 
         while (
-            isActive &&
-            System.currentTimeMillis() < deadline
+            currentCoroutineContext()
+                .isActive &&
+            System.currentTimeMillis() <
+                deadline
         ) {
 
-            /*
-             * আগে form ready কিনা দেখা।
-             */
             val state =
                 runJs(
                     JS.getSearchFormState(
@@ -1054,7 +1598,9 @@ class TicketMonitorService : Service() {
                 )
 
             if (
-                state.contains("\"ready\":true")
+                state.contains(
+                    "\"ready\":true"
+                )
             ) {
 
                 val result =
@@ -1062,9 +1608,16 @@ class TicketMonitorService : Service() {
                         JS.clickSearchIfReady()
                     )
 
+                log(
+                    "Search click result: $result"
+                )
+
                 if (
-                    result.contains("\"ok\":true")
+                    result.contains(
+                        "\"ok\":true"
+                    )
                 ) {
+
                     return true
                 }
             }
@@ -1076,7 +1629,7 @@ class TicketMonitorService : Service() {
     }
 
     // ============================================================
-    // RESULT
+    // RESULT STATE
     // ============================================================
 
     private enum class ResultState {
@@ -1085,25 +1638,39 @@ class TicketMonitorService : Service() {
         TIMEOUT
     }
 
-    private suspend fun waitForResult(): ResultState {
+    // ============================================================
+    // WAIT RESULT
+    // ============================================================
+
+    private suspend fun waitForResult():
+        ResultState {
 
         val deadline =
-            System.currentTimeMillis() + 90_000
-
-        val earlyDeadline =
-            System.currentTimeMillis() + 8_000
+            System.currentTimeMillis() +
+                90_000
 
         while (
-            isActive &&
-            System.currentTimeMillis() < earlyDeadline
+            currentCoroutineContext()
+                .isActive &&
+            System.currentTimeMillis() <
+                deadline
         ) {
 
             val urlOk =
                 runJs(
-                    "location.href.includes('/booking/train/search')"
+                    """
+                    location.href.indexOf(
+                        '/booking/train/search'
+                    ) >= 0
+                    """.trimIndent()
                 )
 
-            if (urlOk.trim() == "true") {
+            if (
+                urlOk.trim() ==
+                    "true"
+            ) {
+
+                delay(1_500)
 
                 val noTicket =
                     runJs(
@@ -1111,52 +1678,31 @@ class TicketMonitorService : Service() {
                     )
 
                 if (
-                    noTicket.trim() == "true"
+                    noTicket.trim() ==
+                        "true"
                 ) {
+
                     return ResultState.NO_TICKET
                 }
 
-                break
-            }
-
-            delay(600)
-        }
-
-        while (
-            isActive &&
-            System.currentTimeMillis() < deadline
-        ) {
-
-            val urlOk =
-                runJs(
-                    "location.href.includes('/booking/train/search')"
-                )
-
-            if (urlOk.trim() == "true") {
-
-                delay(2500)
-
-                val noTicket =
-                    runJs(
-                        JS.checkNoTicketMarker()
-                    )
-
-                if (
-                    noTicket.trim() == "true"
-                ) {
-                    return ResultState.NO_TICKET
-                }
-
+                /*
+                 * Result page exists.
+                 */
                 return ResultState.OK
             }
 
-            delay(1000)
+            delay(700)
         }
 
         return ResultState.TIMEOUT
     }
 
-    private suspend fun confirmActuallyNoTicket(): Boolean {
+    // ============================================================
+    // CONFIRM NO TICKET
+    // ============================================================
+
+    private suspend fun confirmActuallyNoTicket():
+        Boolean {
 
         val raw =
             runJs(
@@ -1173,11 +1719,13 @@ class TicketMonitorService : Service() {
                 ?.toIntOrNull()
                 ?: 0
 
-        if (enabled > 0) {
+        if (
+            enabled > 0
+        ) {
 
             log(
-                "⚠ No-ticket marker আছে কিন্তু " +
-                    "$enabled active BOOK NOW পাওয়া গেছে"
+                "⚠ No-ticket marker but " +
+                    "$enabled active BOOK NOW found"
             )
 
             return false
@@ -1186,15 +1734,23 @@ class TicketMonitorService : Service() {
         return true
     }
 
+    // ============================================================
+    // HANDLE RESULT
+    // ============================================================
+
     private suspend fun handleResultPage(
         fromCity: String,
         toCity: String,
         isFreshNavigation: Boolean
     ): Boolean {
 
-        if (isFreshNavigation) {
+        if (
+            isFreshNavigation
+        ) {
 
-            when (waitForResult()) {
+            when (
+                waitForResult()
+            ) {
 
                 ResultState.NO_TICKET -> {
 
@@ -1222,16 +1778,16 @@ class TicketMonitorService : Service() {
                 }
 
                 ResultState.OK -> {
-                    // continue
+                    // Continue.
                 }
             }
 
         } else {
 
             /*
-             * Quick route result render.
+             * QUICK result.
              */
-            delay(1500)
+            delay(1_500)
 
             val noTicket =
                 runJs(
@@ -1239,23 +1795,28 @@ class TicketMonitorService : Service() {
                 )
 
             if (
-                noTicket.trim() == "true" &&
-                confirmActuallyNoTicket()
+                noTicket.trim() ==
+                    "true"
             ) {
 
-                log(
-                    "✗ NO TICKET: " +
-                        "$fromCity → $toCity"
-                )
+                if (
+                    confirmActuallyNoTicket()
+                ) {
 
-                return true
+                    log(
+                        "✗ NO TICKET: " +
+                            "$fromCity → $toCity"
+                    )
+
+                    return true
+                }
             }
         }
 
         /*
-         * Ticket cards render করার জন্য wait.
+         * Wait for train cards.
          */
-        delay(3000)
+        delay(3_000)
 
         val debug =
             runJs(
@@ -1274,7 +1835,7 @@ class TicketMonitorService : Service() {
         ) {
 
             log(
-                "✗ No ticket found: " +
+                "✗ No ticket: " +
                     "$fromCity → $toCity"
             )
 
@@ -1284,7 +1845,7 @@ class TicketMonitorService : Service() {
         log(
             "🎫 TICKET FOUND: " +
                 "$fromCity → $toCity | " +
-                "${availability.size} class"
+                "${availability.size} result(s)"
         )
 
         val message =
@@ -1294,7 +1855,9 @@ class TicketMonitorService : Service() {
                 availability
             )
 
-        sendTelegram(message)
+        sendTelegram(
+            message
+        )
 
         showAlertNotification(
             fromCity,
@@ -1303,8 +1866,10 @@ class TicketMonitorService : Service() {
         )
 
         /*
-         * Ticket পাওয়ার পর true না ফেরানোর কারণ:
-         * true মানে caller-এর কাছে NO_TICKET।
+         * Caller expects:
+         * true = NO TICKET
+         *
+         * Therefore ticket found = false.
          */
         return false
     }
@@ -1317,11 +1882,14 @@ class TicketMonitorService : Service() {
         List<TicketRow>? {
 
         val deadline =
-            System.currentTimeMillis() + 45_000
+            System.currentTimeMillis() +
+                45_000
 
         while (
-            isActive &&
-            System.currentTimeMillis() < deadline
+            currentCoroutineContext()
+                .isActive &&
+            System.currentTimeMillis() <
+                deadline
         ) {
 
             val raw =
@@ -1331,65 +1899,72 @@ class TicketMonitorService : Service() {
 
             try {
 
-                val arr =
+                val array =
                     JSONArray(raw)
 
-                if (arr.length() > 0) {
+                val rows =
+                    mutableListOf<TicketRow>()
 
-                    val rows =
-                        mutableListOf<TicketRow>()
+                for (
+                    i in 0 until array.length()
+                ) {
 
-                    for (i in 0 until arr.length()) {
+                    val obj =
+                        array.getJSONObject(i)
 
-                        val obj =
-                            arr.getJSONObject(i)
+                    val available =
+                        obj.optInt(
+                            "available",
+                            0
+                        )
 
-                        val available =
-                            obj.optInt(
-                                "available",
-                                0
+                    /*
+                     * IMPORTANT:
+                     *
+                     * BOOK NOW enabled alone is NOT
+                     * considered ticket availability.
+                     *
+                     * Only available > 0.
+                     */
+                    if (
+                        available > 0
+                    ) {
+
+                        rows.add(
+                            TicketRow(
+                                train =
+                                    obj.optString(
+                                        "train",
+                                        "UNKNOWN TRAIN"
+                                    ),
+                                className =
+                                    obj.optString(
+                                        "class_name",
+                                        TRAIN_CLASS
+                                    ),
+                                available =
+                                    available
                             )
-
-                        /*
-                         * Primary rule:
-                         * available number > 0.
-                         *
-                         * Enabled BOOK NOW একা ticket
-                         * হিসেবে গণ্য হবে না।
-                         */
-                        if (available > 0) {
-
-                            rows.add(
-                                TicketRow(
-                                    train =
-                                        obj.optString(
-                                            "train",
-                                            "UNKNOWN TRAIN"
-                                        ),
-                                    className =
-                                        obj.optString(
-                                            "class_name",
-                                            TRAIN_CLASS
-                                        ),
-                                    available =
-                                        available
-                                )
-                            )
-                        }
+                        )
                     }
-
-                    if (rows.isNotEmpty()) {
-                        return rows
-                    }
-
-                    return null
                 }
 
-            } catch (_: Exception) {
-                // DOM এখনও render হচ্ছে
+                if (
+                    rows.isNotEmpty()
+                ) {
+
+                    return rows
+                }
+
+            } catch (
+                _: Exception
+            ) {
+                /*
+                 * DOM may still be rendering.
+                 */
             }
 
-            delay(1500)
+            delay(1_500)
         }
 
         return null
@@ -1423,10 +1998,16 @@ class TicketMonitorService : Service() {
         )
 
         sb.append(
-            "Date: $targetDate\n\n"
+            "Date: $targetDate\n"
         )
 
-        for (row in rows) {
+        sb.append(
+            "Class: $TRAIN_CLASS\n\n"
+        )
+
+        for (
+            row in rows
+        ) {
 
             sb.append(
                 "🚆 ${row.train}\n"
@@ -1446,149 +2027,204 @@ class TicketMonitorService : Service() {
 
     private suspend fun sendTelegram(
         message: String
-    ) = withContext(Dispatchers.IO) {
+    ) {
 
-        val token = botToken
-        val chat = chatId
-
-        if (
-            token.isNullOrBlank() ||
-            chat.isNullOrBlank()
+        withContext(
+            Dispatchers.IO
         ) {
 
-            log(
-                "⚠ Telegram token/chat ID নেই"
-            )
+            val token =
+                botToken
 
-            return@withContext
-        }
+            val chat =
+                chatId
 
-        try {
+            if (
+                token.isNullOrBlank() ||
+                chat.isNullOrBlank()
+            ) {
 
-            val url =
-                URL(
-                    "https://api.telegram.org/bot$token/sendMessage"
+                log(
+                    "⚠ Telegram token/chat ID missing"
                 )
 
-            val conn =
-                url.openConnection()
-                    as HttpURLConnection
+                return@withContext
+            }
 
-            conn.requestMethod = "POST"
-            conn.doOutput = true
+            var connection:
+                HttpURLConnection? =
+                null
 
-            conn.setRequestProperty(
-                "Content-Type",
-                "application/x-www-form-urlencoded"
-            )
+            try {
 
-            conn.connectTimeout = 15_000
-            conn.readTimeout = 15_000
-
-            val body =
-                "chat_id=" +
-                    URLEncoder.encode(
-                        chat,
-                        "UTF-8"
-                    ) +
-                    "&text=" +
-                    URLEncoder.encode(
-                        message,
-                        "UTF-8"
+                val url =
+                    URL(
+                        "https://api.telegram.org/" +
+                            "bot$token/sendMessage"
                     )
 
-            OutputStreamWriter(
-                conn.outputStream
-            ).use {
-                it.write(body)
-            }
+                connection =
+                    url.openConnection()
+                        as HttpURLConnection
 
-            val code =
-                conn.responseCode
+                connection.requestMethod =
+                    "POST"
 
-            if (code in 200..299) {
+                connection.doOutput =
+                    true
 
-                log(
-                    "✓ Telegram notification sent"
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "application/x-www-form-urlencoded"
                 )
 
-            } else {
+                connection.connectTimeout =
+                    15_000
+
+                connection.readTimeout =
+                    15_000
+
+                val body =
+                    "chat_id=" +
+                        URLEncoder.encode(
+                            chat,
+                            "UTF-8"
+                        ) +
+                        "&text=" +
+                        URLEncoder.encode(
+                            message,
+                            "UTF-8"
+                        )
+
+                OutputStreamWriter(
+                    connection.outputStream
+                ).use {
+                    it.write(body)
+                    it.flush()
+                }
+
+                val responseCode =
+                    connection.responseCode
+
+                if (
+                    responseCode in 200..299
+                ) {
+
+                    log(
+                        "✓ Telegram notification sent"
+                    )
+
+                } else {
+
+                    log(
+                        "✗ Telegram HTTP error: " +
+                            responseCode
+                    )
+                }
+
+            } catch (
+                e: Exception
+            ) {
 
                 log(
-                    "✗ Telegram HTTP error: $code"
+                    "✗ Telegram error: " +
+                        "${e.message}"
                 )
+
+            } finally {
+
+                try {
+                    connection?.disconnect()
+                } catch (_: Exception) {
+                }
             }
-
-            conn.disconnect()
-
-        } catch (e: Exception) {
-
-            log(
-                "✗ Telegram error: ${e.message}"
-            )
         }
     }
 
     // ============================================================
-    // NOTIFICATION
+    // NOTIFICATION CHANNELS
     // ============================================================
 
-    private fun createChannels() {
+    private fun createNotificationChannels() {
 
         if (
-            Build.VERSION.SDK_INT >=
+            Build.VERSION.SDK_INT <
             Build.VERSION_CODES.O
         ) {
-
-            val nm =
-                getSystemService(
-                    NotificationManager::class.java
-                )
-
-            val statusChannel =
-                NotificationChannel(
-                    CHANNEL_STATUS,
-                    "Monitor Status",
-                    NotificationManager.IMPORTANCE_LOW
-                )
-
-            nm.createNotificationChannel(
-                statusChannel
-            )
-
-            val alertChannel =
-                NotificationChannel(
-                    CHANNEL_ALERT,
-                    "Ticket Alerts",
-                    NotificationManager.IMPORTANCE_HIGH
-                )
-
-            /*
-             * Android 8+ notification sound
-             * channel level-এ set করতে হয়।
-             */
-            alertChannel.enableVibration(true)
-
-            val audioAttributes =
-                android.media.AudioAttributes.Builder()
-                    .setUsage(
-                        android.media.AudioAttributes.USAGE_NOTIFICATION
-                    )
-                    .setContentType(
-                        android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION
-                    )
-                    .build()
-
-            alertChannel.setSound(
-                android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
-                audioAttributes
-            )
-
-            nm.createNotificationChannel(
-                alertChannel
-            )
+            return
         }
+
+        val manager =
+            getSystemService(
+                NotificationManager::class.java
+            )
+
+        /*
+         * Status channel.
+         */
+        val statusChannel =
+            NotificationChannel(
+                CHANNEL_STATUS,
+                "Monitor Status",
+                NotificationManager.IMPORTANCE_LOW
+            )
+
+        manager.createNotificationChannel(
+            statusChannel
+        )
+
+        /*
+         * Alert channel.
+         *
+         * New channel ID (_v2) ব্যবহার করা হয়েছে,
+         * কারণ Android 8+ এ existing channel-এর
+         * sound setting code দিয়ে reliably পরিবর্তন
+         * করা যায় না।
+         */
+        val alertChannel =
+            NotificationChannel(
+                CHANNEL_ALERT,
+                "Railway Ticket Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+
+        alertChannel.enableVibration(
+            true
+        )
+
+        val audioAttributes =
+            android.media.AudioAttributes
+                .Builder()
+                .setUsage(
+                    android.media.AudioAttributes
+                        .USAGE_NOTIFICATION
+                )
+                .setContentType(
+                    android.media.AudioAttributes
+                        .CONTENT_TYPE_SONIFICATION
+                )
+                .build()
+
+        val notificationSound =
+            android.media.RingtoneManager
+                .getDefaultUri(
+                    android.media.RingtoneManager
+                        .TYPE_NOTIFICATION
+                )
+
+        alertChannel.setSound(
+            notificationSound,
+            audioAttributes
+        )
+
+        manager.createNotificationChannel(
+            alertChannel
+        )
     }
+
+    // ============================================================
+    // STATUS NOTIFICATION
+    // ============================================================
 
     private fun buildStatusNotification(
         text: String
@@ -1599,13 +2235,20 @@ class TicketMonitorService : Service() {
             CHANNEL_STATUS
         )
             .setContentTitle(
-                "Railway Ticket Monitor চালু আছে"
+                "Railway Ticket Monitor"
             )
-            .setContentText(text)
+            .setContentText(
+                text
+            )
             .setSmallIcon(
                 android.R.drawable.ic_menu_search
             )
-            .setOngoing(true)
+            .setOngoing(
+                true
+            )
+            .setOnlyAlertOnce(
+                true
+            )
             .build()
     }
 
@@ -1613,18 +2256,26 @@ class TicketMonitorService : Service() {
         text: String
     ) {
 
-        log(text)
+        log(
+            text
+        )
 
-        val nm =
+        val manager =
             getSystemService(
                 NotificationManager::class.java
             )
 
-        nm.notify(
+        manager.notify(
             NOTIF_ID_STATUS,
-            buildStatusNotification(text)
+            buildStatusNotification(
+                text
+            )
         )
     }
+
+    // ============================================================
+    // TICKET ALERT
+    // ============================================================
 
     private fun showAlertNotification(
         from: String,
@@ -1638,30 +2289,44 @@ class TicketMonitorService : Service() {
                 CHANNEL_ALERT
             )
                 .setContentTitle(
-                    "🎫 Ticket Found: $from → $to"
+                    "🎫 Ticket Found"
                 )
                 .setContentText(
-                    "S_CHAIR ticket available"
+                    "$from → $to | $TRAIN_CLASS"
                 )
                 .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText(message)
+                    NotificationCompat
+                        .BigTextStyle()
+                        .bigText(
+                            message
+                        )
                 )
                 .setSmallIcon(
-                    android.R.drawable.ic_dialog_info
+                    android.R.drawable
+                        .ic_dialog_info
                 )
                 .setPriority(
-                    NotificationCompat.PRIORITY_HIGH
+                    NotificationCompat
+                        .PRIORITY_HIGH
                 )
-                .setAutoCancel(true)
+                .setAutoCancel(
+                    true
+                )
+                .setCategory(
+                    NotificationCompat
+                        .CATEGORY_ALARM
+                )
                 .setDefaults(
                     NotificationCompat.DEFAULT_ALL
                 )
                 .build()
 
-        getSystemService(
-            NotificationManager::class.java
-        ).notify(
+        val manager =
+            getSystemService(
+                NotificationManager::class.java
+            )
+
+        manager.notify(
             alertNotifId++,
             notification
         )
@@ -1676,30 +2341,45 @@ class TicketMonitorService : Service() {
     ) {
 
         val stamped =
-            "[${timeFmt.format(java.util.Date())}] $message"
+            "[${timeFmt.format(Date())}] $message"
 
-        Log.d(
+        android.util.Log.d(
             "TicketMonitor",
             stamped
         )
 
-        synchronized(logBuffer) {
+        synchronized(
+            logBuffer
+        ) {
 
-            logBuffer.add(stamped)
+            logBuffer.add(
+                stamped
+            )
 
             while (
-                logBuffer.size > MAX_LOG_LINES
+                logBuffer.size >
+                    MAX_LOG_LINES
             ) {
-                logBuffer.removeAt(0)
+
+                logBuffer.removeAt(
+                    0
+                )
             }
         }
 
-        sendBroadcast(
-            Intent(ACTION_LOG)
-                .putExtra(
-                    EXTRA_LOG_MSG,
-                    stamped
+        try {
+
+            sendBroadcast(
+                Intent(
+                    ACTION_LOG
                 )
-        )
+                    .putExtra(
+                        EXTRA_LOG_MSG,
+                        stamped
+                    )
+            )
+
+        } catch (_: Exception) {
+        }
     }
 }
