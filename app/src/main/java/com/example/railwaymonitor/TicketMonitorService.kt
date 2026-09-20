@@ -353,6 +353,8 @@ class TicketMonitorService : Service() {
         val openRes = runJs(JS.openDatePicker())
         if (!openRes.contains("\"ok\":true")) {
             log("⚠ ক্যালেন্ডার খুলতে পারিনি (input পাওয়া যায়নি)")
+            val htmlDump = runJs(JS.dumpDateFieldHtml())
+            log("🔍 ডায়াগনস্টিক HTML: $htmlDump")
             return
         }
         delay(600)
